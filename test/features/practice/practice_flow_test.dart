@@ -8,9 +8,10 @@ import '../../support/test_overrides.dart';
 
 /// Proves M7's review gate end-to-end (spec Phase 5 done-criteria): with a
 /// downloaded Assessment pack, a signed-in user can run a full timed exam
-/// start-to-finish — subject/test-type setup, passage-linked questions,
-/// flagging, question palette, submit — and land on a correctly scored,
-/// reviewable results screen. All against imported mock data, not stubs.
+/// start-to-finish — category/test-format/subject setup, passage-linked
+/// questions, flagging, question palette, submit — and land on a correctly
+/// scored, reviewable results screen. All against imported mock data, not
+/// stubs.
 void main() {
   Future<void> pastSplash(WidgetTester tester) async {
     await tester.pump(const Duration(milliseconds: 950));
@@ -31,7 +32,7 @@ void main() {
   }
 
   testWidgets(
-      'Full timed exam offline: Physics / JAMB Practice, flag one question, score 4/4',
+      'Full timed exam offline: Objective / Speed Test / Physics, flag one question, score 4/4',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(390 * 3, 844 * 3);
     tester.view.devicePixelRatio = 3.0;
@@ -51,27 +52,36 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Physics'), findsOneWidget);
     await tester.tap(find.text('Physics'));
-    await tester.pump();
-    await tester.tap(find.textContaining('Download 1 selected'));
     await waitForDownload(tester);
 
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
 
-    // Setup: subject -> test type.
+    // Setup: category -> test format -> subject.
     await tester.tap(find.text('Practice'));
     await tester.pumpAndSettle();
     expect(find.text('Practice'), findsWidgets);
-    expect(find.text('Physics'), findsOneWidget);
-    expect(find.text('JAMB Practice'), findsOneWidget);
-    expect(find.textContaining('4 questions'), findsOneWidget);
+    expect(find.text('Objective'), findsOneWidget);
+    await tester.tap(find.text('Objective'));
+    await tester.pumpAndSettle();
 
-    // The exam's countdown is a real Timer.periodic that keeps scheduling
-    // frames for the whole session (that's the point — it must keep
-    // ticking even if nothing else changes) — `pumpAndSettle()` would
-    // never settle while it's alive, so every interaction from here until
-    // Submit (which cancels it) uses a bounded `pump()` instead.
-    await tester.tap(find.text('JAMB Practice'));
+    expect(find.text('Speed Test'), findsOneWidget);
+    expect(find.text('Standard Test'), findsOneWidget);
+    await tester.tap(find.text('Speed Test'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Physics'), findsOneWidget);
+    await tester.tap(find.text('Physics'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2019'), findsOneWidget);
+    // Tapping the year pushes straight into the exam session, whose
+    // countdown is a real Timer.periodic that keeps scheduling frames for
+    // the whole session (that's the point — it must keep ticking even if
+    // nothing else changes) — `pumpAndSettle()` would never settle while
+    // it's alive, so every interaction from here until Submit (which
+    // cancels it) uses a bounded `pump()` instead.
+    await tester.tap(find.text('2019'));
     // A bounded pump long enough to finish the page's slide-in transition
     // and let the questions FutureProvider resolve — NOT pumpAndSettle,
     // since the countdown's Timer.periodic would keep it spinning forever.
@@ -81,20 +91,20 @@ void main() {
 
     // Exam session: no bottom/top nav chrome — this is the top-level,
     // chrome-free route (see AppRoutes.practiceExam).
-    expect(find.text('Question 1 of 4'), findsOneWidget);
+    expect(find.text('1/4'), findsOneWidget);
 
     // Q1: flag it, then answer correctly, then move on.
     await tester.tap(find.byIcon(Icons.flag_outlined));
     await tester.pump();
     expect(find.byIcon(Icons.flag_rounded), findsWidgets); // toolbar flag icon now filled
-    await tester.tap(find.text('A. 9.8 m/s²'));
+    await tester.tap(find.text('9.8 m/s²'));
     await tester.pump();
     await tester.tap(find.text('Next'));
     await tester.pump();
 
     // Q2.
-    expect(find.text('Question 2 of 4'), findsOneWidget);
-    await tester.tap(find.text('B. Newton'));
+    expect(find.text('2/4'), findsOneWidget);
+    await tester.tap(find.text('Newton'));
     await tester.pump();
     await tester.tap(find.text('Next'));
     await tester.pump();
@@ -102,17 +112,17 @@ void main() {
     // Q3: passage-linked — its title renders even collapsed, once the
     // passage FutureProvider resolves (one more pump beyond the bare
     // setState rebuild the other questions needed).
-    expect(find.text('Question 3 of 4'), findsOneWidget);
+    expect(find.text('3/4'), findsOneWidget);
     await tester.pump();
     expect(find.text('Newton\'s Laws of Motion'), findsOneWidget);
-    await tester.tap(find.text('B. An external force acts on it'));
+    await tester.tap(find.text('An external force acts on it'));
     await tester.pump();
     await tester.tap(find.text('Next'));
     await tester.pump();
 
     // Q4: last question -> "Next" is replaced by "Submit".
-    expect(find.text('Question 4 of 4'), findsOneWidget);
-    await tester.tap(find.text('A. F = ma'));
+    expect(find.text('4/4'), findsOneWidget);
+    await tester.tap(find.text('F = ma'));
     await tester.pump();
     expect(find.text('Next'), findsNothing);
     await tester.tap(find.text('Submit'));
@@ -123,15 +133,17 @@ void main() {
     // Results: perfect score, one flagged question noted in review.
     expect(find.text('4 / 4 correct'), findsOneWidget);
     expect(find.text('100%'), findsOneWidget);
-    expect(find.text('JAMB Practice'), findsOneWidget);
+    expect(find.text('Speed Test'), findsOneWidget);
     expect(find.text('Physics'), findsWidgets);
     expect(find.byIcon(Icons.flag_rounded), findsOneWidget); // the flagged-question badge in review
 
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
 
-    // Back on the Practice setup screen, inside the shell again.
-    expect(find.text('JAMB Practice'), findsOneWidget);
+    // Back on the Practice setup screen, inside the shell again — reset to
+    // the first step (category picker), not stuck on the subject list.
+    expect(find.text('Practice / CBT'), findsOneWidget);
+    expect(find.text('Objective'), findsOneWidget);
 
     await disposeCleanly(tester);
   });

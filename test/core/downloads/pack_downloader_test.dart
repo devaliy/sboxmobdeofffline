@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:success_offline/core/db/assessment_content_db.dart';
 import 'package:success_offline/core/db/study_content_db.dart';
 import 'package:success_offline/core/downloads/pack_downloader.dart';
@@ -52,7 +53,7 @@ void main() {
     );
 
     expect(lastReceived, pack.sizeBytes);
-    final books = await studyDb.watchBooksForClass(8).first;
+    final books = await studyDb.watchBooksForClass(2).first;
     expect(books.single.name, 'Mathematics');
     final subjects = await studyDb.watchSubjectsForBook(books.single.id).first;
     expect(subjects.single.title, 'Week 1: Algebra Basics');
@@ -71,9 +72,24 @@ void main() {
     expect(subjects.single.name, 'Physics');
     expect(await assessmentDb.isSubjectInstalled(pack.scopeId), isTrue);
 
-    final testTypes = await assessmentDb.testTypesForSubject(pack.scopeId);
-    final questions = await assessmentDb.questionsForTestType(testTypes.single.id);
+    final categories = await assessmentDb.watchCategories().first;
+    expect(categories.single.catName, 'Objective');
+    final years = await assessmentDb.watchYearsForSubjectAndCategory(pack.scopeId, categories.single.id).first;
+    expect(years.single.yearName, '2019');
+    final questions = await assessmentDb.questionsForSubjectAndCategory(
+      pack.scopeId,
+      categories.single.id,
+      yearId: years.single.id,
+      limit: 10,
+    );
     expect(questions, hasLength(4));
+
+    // The image-fix regression: the real backend serializes an absent
+    // image as the literal string "questions/None", not null — one mock
+    // question uses that exact real-world value, one uses a real filename.
+    final byId = {for (final q in questions) q.id: q};
+    expect(byId[30021]!.imagePath, isNull);
+    expect(byId[30022]!.imagePath, p.join('content', 'assessment', 'images', 'questions/diagram.png'));
   });
 
   test(
@@ -93,7 +109,7 @@ void main() {
     }
     final half = fullBytes.length ~/ 2;
 
-    final partialFile = File('${tempDir.path}/packs/study_${pack.scopeId}.zip.part');
+    final partialFile = File('${tempDir.path}/packs/study_${pack.scopeId}_${pack.version}.zip.part');
     partialFile.parent.createSync(recursive: true);
     await partialFile.writeAsBytes(fullBytes.sublist(0, half));
 
@@ -142,7 +158,7 @@ void main() {
   test('a checksum mismatch is treated as corruption: clean re-download, not a partial/corrupt state',
       () async {
     final pack = study();
-    final partialFile = File('${tempDir.path}/packs/study_${pack.scopeId}.zip.part');
+    final partialFile = File('${tempDir.path}/packs/study_${pack.scopeId}_${pack.version}.zip.part');
     partialFile.parent.createSync(recursive: true);
     // Garbage, but the *right length* so the downloader thinks it's
     // already fully downloaded and jumps straight to checksum verification.

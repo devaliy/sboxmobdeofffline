@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/endpoints.dart';
 import '../../../core/reference/ng_classes.dart';
 import '../../../core/router/app_routes.dart';
 import '../../../core/sync/sync_worker.dart';
@@ -9,24 +10,13 @@ import '../../../core/theme/theme.dart';
 import '../../../shared/utils/format_bytes.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../auth/application/logout_flow.dart';
 import '../../home/application/home_providers.dart';
 import '../../setup/application/setup_controller.dart';
 import '../../study_center/application/reader_prefs.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
-
-  Future<void> _logout(BuildContext context, WidgetRef ref) async {
-    final hadUnsynced = await ref.read(authControllerProvider).logout();
-    if (!context.mounted) return;
-    if (hadUnsynced) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("You have unsynced results — they'll upload next time you're online and signed in."),
-        ),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,7 +36,7 @@ class SettingsScreen extends ConsumerWidget {
         children: [
           GlowCard(
             glow: true,
-            onTap: () => context.push(AppRoutes.editProfile),
+            onTap: () => context.push(AppRoutes.profile),
             child: Row(
               children: [
                 CircleAvatar(
@@ -69,9 +59,21 @@ class SettingsScreen extends ConsumerWidget {
                       Text(
                         user == null
                             ? ''
-                            : '${user.email} · ${classOptionById(user.currentClassId).name}',
+                            : [
+                                user.email,
+                                if (classOptionByIdOrNull(user.currentClassId) case final c?) c.name,
+                              ].join(' · '),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                      if (user?.studentLinkCode != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Link code: ${user!.studentLinkCode}',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -143,7 +145,7 @@ class SettingsScreen extends ConsumerWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.logout_rounded),
                   title: const Text('Log out'),
-                  onTap: () => _logout(context, ref),
+                  onTap: () => runLogoutFlow(context, ref),
                 ),
               ],
             ),
@@ -226,11 +228,33 @@ class _SyncSectionState extends ConsumerState<_SyncSection> {
     _loadLastSynced();
   }
 
+  /// Corroborates local `synced_at` timestamps with the server's own
+  /// counts (API_DOCUMENTATION.md Section 5's `GET /sync/status`) —
+  /// purely local state has nothing to show right after a reinstall even
+  /// for an account with years of server-side history, so this is the
+  /// more honest source whenever it's available.
   Future<void> _loadLastSynced() async {
     final db = ref.read(currentProgressDbProvider);
-    if (db == null) return;
-    final at = await db.lastSyncedAt();
-    if (mounted) setState(() => _lastSynced = at);
+    final local = db == null ? null : await db.lastSyncedAt();
+
+    DateTime? server;
+    try {
+      final status = await ref.read(syncEndpointsProvider).status();
+      final timestamps = <String?>[
+        (status['practice_attempts'] as Map?)?['last_received_at'] as String?,
+        (status['reading_progress'] as Map?)?['last_received_at'] as String?,
+      ].whereType<String>().map(DateTime.parse);
+      if (timestamps.isNotEmpty) {
+        server = timestamps.reduce((a, b) => a.isAfter(b) ? a : b);
+      }
+    } catch (_) {
+      // Offline, or the endpoint erroring, is never worth surfacing here —
+      // this is a corroborating signal, not the primary source of truth.
+    }
+
+    final candidates = <DateTime>[?local, ?server];
+    final resolved = candidates.isEmpty ? null : candidates.reduce((a, b) => a.isAfter(b) ? a : b);
+    if (mounted) setState(() => _lastSynced = resolved);
   }
 
   Future<void> _syncNow() async {

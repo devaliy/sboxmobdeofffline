@@ -8,9 +8,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/app_routes.dart';
 import '../../../core/theme/theme.dart';
 import '../../../shared/widgets/widgets.dart';
+import '../application/reader_bookmarks.dart';
 import '../application/reader_prefs.dart';
 import '../application/reading_progress_controller.dart';
 import '../application/study_center_providers.dart';
+import 'widgets/reader_controls.dart';
 
 /// Renders `library_contents`' CKEditor-authored HTML faithfully (spec
 /// Section 1.9), with a font-size control and a floating "Take test"
@@ -35,6 +37,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     super.initState();
     loadReaderFontSize().then((value) {
       if (mounted) ref.read(readerFontSizeProvider.notifier).state = value;
+    });
+    loadBookmarkedSubjectIds().then((value) {
+      if (mounted) ref.read(bookmarkedSubjectsProvider.notifier).state = value;
     });
     _scrollController.addListener(_onScroll);
   }
@@ -64,13 +69,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     super.dispose();
   }
 
-  void _adjustFontSize(double delta) {
-    final next =
-        (ref.read(readerFontSizeProvider) + delta).clamp(kMinReaderFontSize, kMaxReaderFontSize);
-    ref.read(readerFontSizeProvider.notifier).state = next;
-    saveReaderFontSize(next);
-  }
-
   @override
   Widget build(BuildContext context) {
     final subject = ref.watch(subjectByIdProvider(widget.subjectId)).valueOrNull;
@@ -80,21 +78,16 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final onSurface = Theme.of(context).colorScheme.onSurface;
 
     final hasQuestions = questionsAsync.valueOrNull?.isNotEmpty ?? false;
+    final contents = contentsAsync.valueOrNull ?? const [];
+    final combinedHtml = contents.map((c) => c.contentHtml).join('\n');
 
     return Scaffold(
       appBar: AppBar(
         title: Text(subject?.title ?? 'Reading', maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
-          IconButton(
-            tooltip: 'Smaller text',
-            icon: const Icon(Icons.text_decrease_rounded),
-            onPressed: () => _adjustFontSize(-1),
-          ),
-          IconButton(
-            tooltip: 'Larger text',
-            icon: const Icon(Icons.text_increase_rounded),
-            onPressed: () => _adjustFontSize(1),
-          ),
+          ReadAloudButton(html: combinedHtml),
+          BookmarkButton(subjectId: widget.subjectId),
+          const FontSizeButton(),
         ],
       ),
       body: contentsAsync.when(

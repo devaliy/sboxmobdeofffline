@@ -8,6 +8,7 @@ import '../../../core/downloads/pack_importer.dart';
 import '../../../core/downloads/pack_remover.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/endpoints.dart';
+import '../../auth/application/auth_controller.dart';
 import '../domain/content_pack_manifest.dart';
 
 enum PackPhase { idle, downloading, importing, installed, failed }
@@ -153,6 +154,14 @@ class SetupController {
           );
         }
         _setState(pack, const PackDownloadState(phase: PackPhase.installed));
+        final db = _ref.read(currentProgressDbProvider);
+        if (db != null) {
+          await db.addNotification(
+            type: 'download',
+            title: 'Download complete',
+            body: '"${pack.title}" is ready to use offline.',
+          );
+        }
         return;
       } on PackDownloadException catch (e) {
         final isLastAttempt = attempt == _maxAutoAttempts;

@@ -60,15 +60,13 @@ void main() {
     expect(tester.takeException(), isNull);
 
     // Skip actually downloading (irrelevant to this check) — go straight
-    // to the shell via Settings/Progress/Practice, which is reachable
+    // to the shell via Settings/Analytics/Practice, which is reachable
     // from Setup only once content exists, so instead directly drive the
     // router past the gate the way the M3 flow test does: download the
     // one Study pack, which is enough to unlock Home.
     await tester.tap(find.text('Study Center'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('JSS2 Mathematics'));
-    await tester.pump();
-    await tester.tap(find.textContaining('Download 1 selected'));
     for (var i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
@@ -80,7 +78,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
-    for (final tab in ['Study', 'Practice', 'Progress', 'Settings', 'Home']) {
+    for (final tab in ['Study', 'Practice', 'Analytics', 'Settings', 'Home']) {
       await tester.tap(find.text(tab).first);
       await safeSettle(tester);
       expect(tester.takeException(), isNull, reason: 'Overflow/exception on the $tab tab at 1.4x text scale');

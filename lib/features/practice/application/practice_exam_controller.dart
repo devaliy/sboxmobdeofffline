@@ -23,7 +23,6 @@ class PracticeExamController {
 
   Future<PracticeResult> submit({
     required int subjectId,
-    required int testTypeId,
     required String subjectName,
     required String testTypeName,
     required List<Question> questions,
@@ -76,7 +75,12 @@ class PracticeExamController {
             id: attemptId,
             sourceType: 'assessment',
             subjectId: Value(subjectId),
-            testTypeId: Value(testTypeId),
+            // No `testTypeId`: these are client-side formats (Speed/Standard),
+            // not rows in the server's (permanently empty, in production)
+            // `test_types` table — the column stays null, exactly as it
+            // already does for every real question's `test_type_id` today.
+            subjectName: Value(subjectName),
+            testTypeLabel: Value(testTypeName),
             score: score,
             totalQuestions: questions.length,
             timeSpentSeconds: timeSpentSeconds,
@@ -94,7 +98,6 @@ class PracticeExamController {
           id: attemptId,
           sourceType: 'assessment',
           subjectId: subjectId,
-          testTypeId: testTypeId,
           score: score,
           totalQuestions: questions.length,
           timeSpentSeconds: timeSpentSeconds,
@@ -106,6 +109,12 @@ class PracticeExamController {
       ));
     });
     await db.recordActivity(pointsEarned: score * 10);
+    final percent = questions.isEmpty ? 0 : (score / questions.length * 100).round();
+    await db.addNotification(
+      type: 'test_result',
+      title: 'Test result: $subjectName',
+      body: 'You scored $score/${questions.length} ($percent%) on $testTypeName.',
+    );
 
     return PracticeResult(
       subjectName: subjectName,

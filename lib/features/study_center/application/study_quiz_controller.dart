@@ -23,6 +23,7 @@ class StudyQuizController {
 
   Future<StudyQuizResult> submit({
     required int librarySubjectId,
+    String? librarySubjectName,
     required List<LibraryQuestion> questions,
     required Map<int, String?> selectedOptions,
     required DateTime startedAt,
@@ -71,6 +72,8 @@ class StudyQuizController {
             id: attemptId,
             sourceType: 'library',
             librarySubjectId: Value(librarySubjectId),
+            subjectName: Value(librarySubjectName),
+            testTypeLabel: const Value('Self Test'),
             score: score,
             totalQuestions: questions.length,
             timeSpentSeconds: completedAt.difference(startedAt).inSeconds,
@@ -99,6 +102,12 @@ class StudyQuizController {
       ));
     });
     await db.recordActivity(pointsEarned: score * 10);
+    final percent = questions.isEmpty ? 0 : (score / questions.length * 100).round();
+    await db.addNotification(
+      type: 'test_result',
+      title: 'Test result: ${librarySubjectName ?? 'Study'}',
+      body: 'You scored $score/${questions.length} ($percent%) on your self-test.',
+    );
 
     return StudyQuizResult(questions: questions, selectedOptions: selectedOptions, score: score);
   }

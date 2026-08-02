@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Compiled Windows installer output (rebuild via installer/success_offline.iss;
+# the script itself stays tracked, only the generated Setup.exe doesn't).
+/installer/output/

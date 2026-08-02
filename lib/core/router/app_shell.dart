@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/ai_chat/presentation/widgets/ai_chat_fab.dart';
 import '../theme/app_spacing.dart';
 import 'widgets/app_bottom_nav.dart';
 import 'widgets/app_top_nav.dart';
@@ -31,6 +32,7 @@ class AppShell extends StatelessWidget {
           return Scaffold(
             appBar: AppTopNav(currentIndex: navigationShell.currentIndex, onTap: _onTap),
             body: navigationShell,
+            floatingActionButton: const AiChatFab(),
           );
         }
 
@@ -40,6 +42,7 @@ class AppShell extends StatelessWidget {
             currentIndex: navigationShell.currentIndex,
             onTap: _onTap,
           ),
+          floatingActionButton: const AiChatFab(),
         );
       },
     );

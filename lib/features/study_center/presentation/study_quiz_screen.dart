@@ -30,8 +30,10 @@ class _StudyQuizScreenState extends ConsumerState<StudyQuizScreen> {
   Future<void> _submit(List<LibraryQuestion> questions) async {
     setState(() => _submitting = true);
     try {
+      final subject = ref.read(subjectByIdProvider(widget.subjectId)).valueOrNull;
       final result = await ref.read(studyQuizControllerProvider).submit(
             librarySubjectId: widget.subjectId,
+            librarySubjectName: subject?.title,
             questions: questions,
             selectedOptions: _selected,
             startedAt: _startedAt,

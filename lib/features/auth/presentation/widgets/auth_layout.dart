@@ -4,9 +4,10 @@ import '../../../../core/theme/theme.dart';
 import '../../../../shared/widgets/widgets.dart';
 
 /// Shared responsive frame for Splash/Login/Register/Forgot-Password: a
-/// glowing gradient hero (monogram + tagline) and a form area — split
-/// left/right on desktop (matching the mockups' auth split-panel), stacked
-/// top/bottom on mobile. One layout, two densities, per spec Section 1.8.
+/// glowing gradient hero (a floating card carrying the real logo + brand
+/// illustration + tagline) and a form area — split left/right on desktop
+/// (matching the mockups' auth split-panel), stacked top/bottom on mobile.
+/// One layout, two densities, per spec Section 1.8.
 class AuthLayout extends StatelessWidget {
   const AuthLayout({
     super.key,
@@ -42,7 +43,11 @@ class AuthLayout extends StatelessWidget {
           return SafeArea(
             child: Column(
               children: [
-                SizedBox(height: 220, child: hero),
+                // Sized by its own content, not a fixed box — a hard-coded
+                // height here is exactly what silently clipped the hero
+                // card before (spec Section 9's text-scale requirement
+                // makes this a real risk, not just a hypothetical one).
+                hero,
                 Expanded(child: SingleChildScrollView(child: form)),
               ],
             ),
@@ -77,31 +82,44 @@ class _Hero extends StatelessWidget {
           ),
           Center(
             child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.xxxl),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AppMonogram(size: compact ? 56 : 88)
-                      .animate()
-                      .scale(begin: const Offset(0.7, 0.7), curve: Curves.elasticOut, duration: 700.ms)
-                      .fadeIn(),
-                  const SizedBox(height: AppSpacing.lg),
-                  Text(
-                    'SuccessBOX',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white),
+              padding: EdgeInsets.all(compact ? AppSpacing.xl : AppSpacing.xxxl),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(AppRadius.xxl),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 12)),
+                    ],
                   ),
-                  if (!compact) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      tagline,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: Colors.white.withValues(alpha: 0.9)),
-                    ).animate(delay: 200.ms).fadeIn(duration: 500.ms).moveY(begin: 10, end: 0),
-                  ],
-                ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppLogo(width: compact ? 130 : 160)
+                          .animate()
+                          .scale(begin: const Offset(0.85, 0.85), curve: Curves.easeOutBack, duration: 600.ms)
+                          .fadeIn(),
+                      SizedBox(height: compact ? AppSpacing.md : AppSpacing.lg),
+                      Image.asset(
+                        'assets/branding/learning_illustration.png',
+                        width: compact ? 150 : 220,
+                      ).animate(delay: 150.ms).fadeIn(duration: 500.ms).moveY(begin: 12, end: 0),
+                      if (!compact) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        Text(
+                          tagline,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: AppColors.inkNavy.withValues(alpha: 0.75)),
+                        ).animate(delay: 300.ms).fadeIn(duration: 500.ms).moveY(begin: 10, end: 0),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

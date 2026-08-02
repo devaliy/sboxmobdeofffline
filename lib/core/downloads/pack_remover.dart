@@ -14,6 +14,15 @@ import '../db/study_content_db.dart';
 /// Assessment) are left untouched since another still-installed pack may
 /// reference them.
 class PackRemover {
+  PackRemover({Future<Directory> Function()? documentsDirProvider})
+      : _documentsDirProvider = documentsDirProvider ?? DbPaths.documentsDir;
+
+  /// Overridable so tests can use [Directory.systemTemp] directly —
+  /// `path_provider`'s real implementation needs a platform channel that
+  /// doesn't exist under plain `test()`/`flutter test`, same reasoning as
+  /// [PackDownloader]'s `tempDirProvider`.
+  final Future<Directory> Function() _documentsDirProvider;
+
   Future<void> removeStudyPack({required StudyContentDb db, required int libraryBookId}) async {
     late final List<String> imagePaths;
 
@@ -74,7 +83,7 @@ class PackRemover {
 
   Future<void> _deleteFiles(List<String> relativePaths) async {
     if (relativePaths.isEmpty) return;
-    final docs = await DbPaths.documentsDir();
+    final docs = await _documentsDirProvider();
     for (final rel in relativePaths) {
       final file = File(p.join(docs.path, rel));
       if (await file.exists()) {

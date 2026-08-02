@@ -106,6 +106,68 @@ void main() {
     expect(stats.longestStreakDays, 5);
   });
 
+  test('practice_attempts persists subjectName/testTypeLabel and answersForAttempt reads them back',
+      () async {
+    const attemptId = 'attempt-with-labels';
+    await db.into(db.practiceAttempts).insert(PracticeAttemptsCompanion.insert(
+          id: attemptId,
+          sourceType: 'assessment',
+          subjectId: const Value(7),
+          subjectName: const Value('Physics'),
+          testTypeLabel: const Value('Speed Test'),
+          score: 3,
+          totalQuestions: 4,
+          timeSpentSeconds: 120,
+          startedAt: '2026-07-29T08:00:00Z',
+          completedAt: '2026-07-29T08:02:00Z',
+        ));
+    await db.into(db.practiceAnswers).insert(PracticeAnswersCompanion.insert(
+          id: 'answer-1',
+          attemptId: attemptId,
+          questionId: 1,
+          questionSource: 'assessment',
+          selectedOption: const Value('A'),
+          isCorrect: true,
+          timeSpentSeconds: 10,
+        ));
+
+    final attempts = await db.watchAllAttempts().first;
+    expect(attempts.single.subjectName, 'Physics');
+    expect(attempts.single.testTypeLabel, 'Speed Test');
+
+    final answers = await db.answersForAttempt(attemptId);
+    expect(answers, hasLength(1));
+    expect(answers.single.selectedOption, 'A');
+  });
+
+  test('deleteAttempt removes the attempt and its answers', () async {
+    const attemptId = 'attempt-to-delete';
+    await db.into(db.practiceAttempts).insert(PracticeAttemptsCompanion.insert(
+          id: attemptId,
+          sourceType: 'library',
+          librarySubjectId: const Value(5),
+          score: 1,
+          totalQuestions: 2,
+          timeSpentSeconds: 60,
+          startedAt: '2026-07-29T08:00:00Z',
+          completedAt: '2026-07-29T08:01:00Z',
+        ));
+    await db.into(db.practiceAnswers).insert(PracticeAnswersCompanion.insert(
+          id: 'answer-del',
+          attemptId: attemptId,
+          questionId: 9,
+          questionSource: 'library',
+          selectedOption: const Value('C'),
+          isCorrect: false,
+          timeSpentSeconds: 5,
+        ));
+
+    await db.deleteAttempt(attemptId);
+
+    expect(await db.watchAllAttempts().first, isEmpty);
+    expect(await db.answersForAttempt(attemptId), isEmpty);
+  });
+
   test('reading_progress upserts per library subject', () async {
     await db.into(db.readingProgress).insert(ReadingProgressCompanion.insert(
           id: 'rp-1',

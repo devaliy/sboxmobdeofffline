@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/app_routes.dart';
 import '../../../../core/theme/theme.dart';
+import '../../../../shared/widgets/widgets.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../application/home_providers.dart';
 
@@ -15,7 +18,12 @@ String _greeting() {
 /// Greeting + streak flame — Home's masthead. Points/streaks live here and
 /// on Progress only, never inside an active exam session (spec Section 1.7).
 class HomeHeader extends ConsumerWidget {
-  const HomeHeader({super.key});
+  const HomeHeader({super.key, this.showBellAndProfile = false});
+
+  /// Mobile has no top nav, so its own bell/profile-tap affordances live
+  /// here instead — desktop already gets both from [AppTopNav], so this
+  /// stays false there to avoid showing the cluster twice.
+  final bool showBellAndProfile;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -27,12 +35,15 @@ class HomeHeader extends ConsumerWidget {
 
     return Row(
       children: [
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: AppColors.brandBlue,
-          child: Text(
-            (user?.firstName.isNotEmpty ?? false) ? user!.firstName.substring(0, 1).toUpperCase() : '?',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        GestureDetector(
+          onTap: showBellAndProfile ? () => context.push(AppRoutes.profile) : null,
+          child: CircleAvatar(
+            radius: 22,
+            backgroundColor: AppColors.brandBlue,
+            child: Text(
+              (user?.firstName.isNotEmpty ?? false) ? user!.firstName.substring(0, 1).toUpperCase() : '?',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
           ),
         ),
         const SizedBox(width: AppSpacing.md),
@@ -54,6 +65,7 @@ class HomeHeader extends ConsumerWidget {
           ),
         ),
         if (streak > 0) _StreakBadge(days: streak),
+        if (showBellAndProfile) const NotificationBell(),
       ],
     );
   }

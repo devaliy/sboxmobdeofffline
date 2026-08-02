@@ -126,8 +126,68 @@ class AssessmentContentDb extends _$AssessmentContentDb {
   Future<List<TestType>> testTypesForSubject(int subjectId) =>
       (select(testTypes)..where((t) => t.subjectId.equals(subjectId))).get();
 
+  Stream<List<TestType>> watchTestTypesForSubject(int subjectId) =>
+      (select(testTypes)..where((t) => t.subjectId.equals(subjectId))).watch();
+
   Future<List<Question>> questionsForTestType(int testTypeId) =>
       (select(questions)..where((t) => t.testTypeId.equals(testTypeId))).get();
+
+  Future<Question?> questionById(int id) =>
+      (select(questions)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<Subject?> subjectById(int id) =>
+      (select(subjects)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  /// Every installed category, across every installed subject — `categories`
+  /// is a flat, global table (no `subject_id` column), so a category
+  /// imported while processing one subject's pack is immediately usable to
+  /// filter questions/subjects from any other installed subject too.
+  Stream<List<Category>> watchCategories() => select(categories).watch();
+
+  /// Subjects that actually have at least one question in [categoryId] —
+  /// the practice picker's "subject" step is scoped to whatever's real for
+  /// the category just chosen, not every installed subject regardless of
+  /// relevance.
+  Stream<List<Subject>> watchSubjectsForCategory(int categoryId) {
+    final query = select(subjects).join([
+      innerJoin(questions, questions.subjectId.equalsExp(subjects.id)),
+    ])
+      ..where(questions.categoryId.equals(categoryId))
+      ..groupBy([subjects.id]);
+    return query.watch().map((rows) => rows.map((row) => row.readTable(subjects)).toList());
+  }
+
+  /// Years that actually have at least one question in [subjectId]+
+  /// [categoryId] — a subject's `years` aren't all necessarily represented
+  /// within any one category, since each question picks one category and
+  /// one year independently.
+  Stream<List<Year>> watchYearsForSubjectAndCategory(int subjectId, int categoryId) {
+    final query = select(years).join([
+      innerJoin(questions, questions.yearId.equalsExp(years.id)),
+    ])
+      ..where(questions.subjectId.equals(subjectId) & questions.categoryId.equals(categoryId))
+      ..groupBy([years.id]);
+    return query.watch().map((rows) => rows.map((row) => row.readTable(years)).toList());
+  }
+
+  /// Up to [limit] questions for a subject+category+year, in a stable
+  /// order (not randomized — deterministic id order, same as every other
+  /// read path in this file) capped at whatever's actually available,
+  /// since a subject+category+year combination can have fewer questions
+  /// than a test format asks for.
+  Future<List<Question>> questionsForSubjectAndCategory(
+    int subjectId,
+    int categoryId, {
+    required int yearId,
+    required int limit,
+  }) {
+    final query = select(questions)
+      ..where((q) =>
+          q.subjectId.equals(subjectId) & q.categoryId.equals(categoryId) & q.yearId.equals(yearId))
+      ..orderBy([(q) => OrderingTerm.asc(q.id)])
+      ..limit(limit);
+    return query.get();
+  }
 
   Future<Passage?> passageById(int passageId) =>
       (select(passages)..where((t) => t.id.equals(passageId))).getSingleOrNull();

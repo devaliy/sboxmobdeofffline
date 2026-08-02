@@ -35,7 +35,7 @@ void main() {
       ..httpClientAdapter = MockApiAdapter(store);
     tempDir = Directory.systemTemp.createTempSync('pack_rm_test_');
     downloader = PackDownloader(dio, PackImporter(), tempDirProvider: () async => tempDir);
-    remover = PackRemover();
+    remover = PackRemover(documentsDirProvider: () async => tempDir);
     studyDb = StudyContentDb.forTesting(NativeDatabase.memory());
     assessmentDb = AssessmentContentDb.forTesting(NativeDatabase.memory());
 
@@ -58,7 +58,7 @@ void main() {
     final bookId = manifest.studyPacks.single.scopeId;
 
     expect(await studyDb.watchInstalledPacks().first, hasLength(1));
-    expect(await studyDb.watchBooksForClass(8).first, hasLength(1));
+    expect(await studyDb.watchBooksForClass(2).first, hasLength(1));
     final subjects = await studyDb.watchSubjectsForBook(bookId).first;
     expect(subjects, isNotEmpty);
     expect(await studyDb.contentsForSubject(subjects.single.id), isNotEmpty);
@@ -68,7 +68,7 @@ void main() {
 
     expect(await studyDb.watchInstalledPacks().first, isEmpty);
     expect(await studyDb.isBookInstalled(bookId), isFalse);
-    expect(await studyDb.watchBooksForClass(8).first, isEmpty);
+    expect(await studyDb.watchBooksForClass(2).first, isEmpty);
     expect(await studyDb.watchSubjectsForBook(bookId).first, isEmpty);
     expect(await (studyDb.select(studyDb.libraryContents)).get(), isEmpty);
     expect(await (studyDb.select(studyDb.libraryQuestions)).get(), isEmpty);
@@ -91,7 +91,7 @@ void main() {
     final subjectId = manifest.assessmentPacks.single.scopeId;
 
     expect(await assessmentDb.watchInstalledPacks().first, hasLength(1));
-    expect(await assessmentDb.testTypesForSubject(subjectId), isNotEmpty);
+    expect(await (assessmentDb.select(assessmentDb.questions)).get(), isNotEmpty);
 
     await remover.removeAssessmentPack(db: assessmentDb, subjectId: subjectId);
 
@@ -103,7 +103,6 @@ void main() {
     // Shared lookup rows survive.
     expect(await (assessmentDb.select(assessmentDb.categories)).get(), isNotEmpty);
     expect(await (assessmentDb.select(assessmentDb.years)).get(), isNotEmpty);
-    expect(await (assessmentDb.select(assessmentDb.testTypes)).get(), isNotEmpty);
     expect(await (assessmentDb.select(assessmentDb.passages)).get(), isNotEmpty);
 
     // Study domain untouched.

@@ -18,6 +18,6 @@ const List<NavItem> kMainNavItems = [
   NavItem(icon: Icons.home_rounded, label: 'Home'),
   NavItem(icon: Icons.menu_book_rounded, label: 'Study'),
   NavItem(icon: Icons.assignment_rounded, label: 'Practice'),
-  NavItem(icon: Icons.insights_rounded, label: 'Progress'),
+  NavItem(icon: Icons.insights_rounded, label: 'Analytics'),
   NavItem(icon: Icons.settings_rounded, label: 'Settings'),
 ];

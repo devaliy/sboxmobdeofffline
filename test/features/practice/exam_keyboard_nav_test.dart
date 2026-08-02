@@ -45,8 +45,6 @@ void main() {
     await tester.tap(find.text('Assessment'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Physics'));
-    await tester.pump();
-    await tester.tap(find.textContaining('Download 1 selected'));
     await waitForDownload(tester);
 
     await tester.tap(find.text('Continue'));
@@ -54,7 +52,13 @@ void main() {
 
     await tester.tap(find.text('Practice'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('JAMB Practice'));
+    await tester.tap(find.text('Objective'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Speed Test'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Physics'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2019'));
     // Bounded pump, not pumpAndSettle — the countdown's Timer.periodic
     // keeps scheduling frames for the whole session (see
     // practice_flow_test.dart for the full explanation).
@@ -62,7 +66,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    expect(find.text('Question 1 of 4'), findsOneWidget);
+    expect(find.text('1/4'), findsOneWidget);
 
     // Q1: correct_option is 'A' — select it, then move on with the arrow
     // key instead of tapping "Next".
@@ -71,14 +75,14 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
 
-    expect(find.text('Question 2 of 4'), findsOneWidget);
+    expect(find.text('2/4'), findsOneWidget);
     // Q2: correct_option is 'B'.
     await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
 
-    expect(find.text('Question 3 of 4'), findsOneWidget);
+    expect(find.text('3/4'), findsOneWidget);
     // Q3 (passage-linked): correct_option is 'B'. Use the digit-key
     // alias (2 == B) to prove both key schemes work, not just letters.
     await tester.sendKeyEvent(LogicalKeyboardKey.digit2);
@@ -86,7 +90,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
 
-    expect(find.text('Question 4 of 4'), findsOneWidget);
+    expect(find.text('4/4'), findsOneWidget);
     // Q4: correct_option is 'A'. This is the last question, so onNext is
     // null and Enter falls through to submit — every question is already
     // answered, so no confirmation dialog appears.
@@ -122,8 +126,6 @@ void main() {
     await tester.tap(find.text('Assessment'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Physics'));
-    await tester.pump();
-    await tester.tap(find.textContaining('Download 1 selected'));
     await waitForDownload(tester);
 
     await tester.tap(find.text('Continue'));
@@ -131,7 +133,13 @@ void main() {
 
     await tester.tap(find.text('Practice'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('JAMB Practice'));
+    await tester.tap(find.text('Objective'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Speed Test'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Physics'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2019'));
     for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
@@ -143,11 +151,11 @@ void main() {
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
-    expect(find.text('Question 2 of 4'), findsOneWidget);
+    expect(find.text('2/4'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pump();
-    expect(find.text('Question 1 of 4'), findsOneWidget);
+    expect(find.text('1/4'), findsOneWidget);
 
     // Answer the remaining three questions and submit — if Q1's
     // keyboard-driven selection hadn't actually persisted, this would

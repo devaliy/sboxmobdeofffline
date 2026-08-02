@@ -5,12 +5,15 @@ import 'mock/mock_api_adapter.dart';
 import 'mock/mock_backend_store.dart';
 import 'secure_session_store.dart';
 
-/// Flip to `false` and point [kApiBaseUrl] at the real backend once it's
-/// live — no other code in the app needs to change (spec Section 14).
-const bool kUseMockBackend = true;
+/// The real backend (API_DOCUMENTATION.md) is what the app talks to by
+/// default now. This is only a *default* — [useMockBackendProvider] below
+/// is what `dioProvider` actually reads, and every test overrides it back
+/// to `true` via `testProviderOverrides()` regardless of this constant, so
+/// `flutter test` can never accidentally hit the live server no matter
+/// what this flag is set to.
+const bool kUseMockBackend = false;
 
-const String kApiBaseUrl =
-    kUseMockBackend ? 'https://mock.local/api/v1' : 'https://api.chroniclesrevolution.example/api/v1';
+const String kApiBaseUrl = 'https://successbox.ng/api/v1';
 
 /// Flips to true when any *protected* endpoint returns 401 — a real bearer
 /// token expired mid-session. Per spec Section 8, this must never force the
@@ -19,6 +22,11 @@ const String kApiBaseUrl =
 final needsReauthProvider = StateProvider<bool>((ref) => false);
 
 final mockBackendStoreProvider = Provider<MockBackendStore>((ref) => MockBackendStore());
+
+/// The provider `dioProvider` actually reads — a thin, overridable wrapper
+/// around [kUseMockBackend] so tests can force the mock on regardless of
+/// what the app's own default is. See `test/support/test_overrides.dart`.
+final useMockBackendProvider = Provider<bool>((ref) => kUseMockBackend);
 
 /// dio instance + auth interceptor. Every Section 13 endpoint is called
 /// through this — see `endpoints.dart` for the typed wrappers.
@@ -30,7 +38,7 @@ final dioProvider = Provider<Dio>((ref) {
     responseType: ResponseType.json,
   ));
 
-  if (kUseMockBackend) {
+  if (ref.watch(useMockBackendProvider)) {
     dio.httpClientAdapter = MockApiAdapter(ref.watch(mockBackendStoreProvider));
   }
 

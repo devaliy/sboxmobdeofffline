@@ -21,6 +21,12 @@ class PracticeAttempts extends Table {
   TextColumn get startedAt => text().named('started_at')();
   TextColumn get completedAt => text().named('completed_at')();
   TextColumn get syncedAt => text().named('synced_at').nullable()();
+  // Denormalized snapshot of the subject/format names at attempt time (added
+  // schema v2) — the Analytics report needs these for its data table, and a
+  // snapshot avoids "this attempt references content that's since been
+  // removed" edge cases that a live join against the content DBs would hit.
+  TextColumn get subjectName => text().named('subject_name').nullable()();
+  TextColumn get testTypeLabel => text().named('test_type_label').nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -82,12 +88,65 @@ class SyncOutbox extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Read-through cache of SuccessAI conversations (SUCCESSAI_BUILD_PROMPT.md
+/// Section 3) — server is the source of truth; this table only exists so a
+/// past conversation is still readable offline. Upserted (insert-or-replace
+/// by `id`) every time `GET /ai/conversations` succeeds online, never
+/// written to any other way — there is no outbox/sync for this table since
+/// conversations only ever originate server-side.
+class AiConversationsCache extends Table {
+  TextColumn get id => text()();
+  TextColumn get title => text()();
+  TextColumn get updatedAt => text().named('updated_at')();
+  TextColumn get lastMessage => text().named('last_message').nullable()();
+  TextColumn get cachedAt => text().named('cached_at')();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Read-through cache of one conversation's messages, same reasoning as
+/// [AiConversationsCache] — upserted every time
+/// `GET /ai/conversations/{id}/messages` succeeds online.
+class AiMessagesCache extends Table {
+  TextColumn get id => text()();
+  TextColumn get conversationId => text().named('conversation_id')();
+  TextColumn get content => text()();
+  BoolColumn get isAi => boolean().named('is_ai')();
+  TextColumn get sender => text()();
+  TextColumn get createdAt => text().named('created_at')();
+  TextColumn get cachedAt => text().named('cached_at')();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Local, client-generated activity notifications ("you scored 80% on
+/// Physics", "Biology pack finished downloading") — there is no server
+/// notifications endpoint (this app has no push infrastructure), so this
+/// is purely a local activity log, written by the same controllers that
+/// already call [ProgressDb.recordActivity] for streaks/points.
+class LocalNotifications extends Table {
+  TextColumn get id => text()();
+  TextColumn get type => text()(); // 'test_result' | 'download' | 'streak'
+  TextColumn get title => text()();
+  TextColumn get body => text()();
+  TextColumn get createdAt => text().named('created_at')();
+  TextColumn get readAt => text().named('read_at').nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
 @DriftDatabase(tables: [
   PracticeAttempts,
   PracticeAnswers,
   ReadingProgress,
   LocalStats,
   SyncOutbox,
+  AiConversationsCache,
+  AiMessagesCache,
+  LocalNotifications,
 ])
 class ProgressDb extends _$ProgressDb {
   ProgressDb.forUser(String userId) : super(_openConnection(userId));
@@ -95,7 +154,7 @@ class ProgressDb extends _$ProgressDb {
   ProgressDb.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -105,6 +164,17 @@ class ProgressDb extends _$ProgressDb {
           // always has something to emit — a fresh account starts at 0
           // points / 0 streak, not "no row yet".
           await into(localStats).insert(LocalStatsCompanion.insert());
+        },
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(practiceAttempts, practiceAttempts.subjectName);
+            await m.addColumn(practiceAttempts, practiceAttempts.testTypeLabel);
+          }
+          if (from < 3) {
+            await m.createTable(aiConversationsCache);
+            await m.createTable(aiMessagesCache);
+            await m.createTable(localNotifications);
+          }
         },
       );
 
@@ -168,6 +238,17 @@ class ProgressDb extends _$ProgressDb {
       longestStreakDays: Value(longest),
       lastActiveDate: Value(today),
     ));
+
+    // Only the transition onto a genuinely new active day, not every call
+    // on an already-counted day — otherwise finishing three tests in one
+    // sitting would fire three identical streak notifications.
+    if (stats.lastActiveDate != today && streak > 1) {
+      await addNotification(
+        type: 'streak',
+        title: '$streak-day streak!',
+        body: 'You\'ve kept your streak going for $streak days in a row. Keep it up!',
+      );
+    }
   }
 
   static String _dateOnly(DateTime dt) => dt.toIso8601String().substring(0, 10);
@@ -184,9 +265,38 @@ class ProgressDb extends _$ProgressDb {
   Stream<List<PracticeAttempt>> watchAllAttempts() =>
       (select(practiceAttempts)..orderBy([(t) => OrderingTerm.asc(t.completedAt)])).watch();
 
+  Future<void> deleteAttempt(String id) async {
+    await transaction(() async {
+      await (delete(practiceAnswers)..where((t) => t.attemptId.equals(id))).go();
+      await (delete(practiceAttempts)..where((t) => t.id.equals(id))).go();
+    });
+  }
+
+  Future<List<PracticeAnswer>> answersForAttempt(String attemptId) =>
+      (select(practiceAnswers)..where((t) => t.attemptId.equals(attemptId))).get();
+
   Stream<ReadingProgressData?> watchReadingProgress(int librarySubjectId) =>
       (select(readingProgress)..where((t) => t.librarySubjectId.equals(librarySubjectId)))
           .watchSingleOrNull();
+
+  /// Every subject in [librarySubjectIds] that has a progress row — used to
+  /// compute a *book's* overall completion (spec: Reader's header progress
+  /// bar), which needs every subject in the book, not just the one most
+  /// recently opened.
+  Stream<List<ReadingProgressData>> watchReadingProgressForSubjects(Set<int> librarySubjectIds) {
+    if (librarySubjectIds.isEmpty) return Stream.value(const []);
+    return (select(readingProgress)..where((t) => t.librarySubjectId.isIn(librarySubjectIds))).watch();
+  }
+
+  /// Most recently opened subjects, for Study Center's "Recently Read"
+  /// shelf — a wider window than [watchMostRecentReading]'s single row,
+  /// since the caller de-duplicates down to distinct *books*.
+  Stream<List<ReadingProgressData>> watchRecentReadingProgress({int limit = 30}) {
+    final query = select(readingProgress)
+      ..orderBy([(t) => OrderingTerm.desc(t.lastOpenedAt)])
+      ..limit(limit);
+    return query.watch();
+  }
 
   /// The single most recently-opened subject, for Home's "Continue
   /// studying" card — null once nothing has been read yet.
@@ -264,5 +374,67 @@ class ProgressDb extends _$ProgressDb {
     if (a == null) return p;
     if (p == null) return a;
     return a.isAfter(p) ? a : p;
+  }
+
+  // --- SuccessAI read-through cache (SUCCESSAI_BUILD_PROMPT.md Section 3) --
+
+  /// Insert-or-replace by id — called every time `GET /ai/conversations`
+  /// succeeds online, never any other way (server is the only source of
+  /// truth for what conversations exist).
+  Future<void> upsertCachedConversations(List<AiConversationsCacheCompanion> rows) async {
+    await batch((b) => b.insertAllOnConflictUpdate(aiConversationsCache, rows));
+  }
+
+  Stream<List<AiConversationsCacheData>> watchCachedConversations() =>
+      (select(aiConversationsCache)..orderBy([(t) => OrderingTerm.desc(t.updatedAt)])).watch();
+
+  /// Insert-or-replace by id — called every time
+  /// `GET /ai/conversations/{id}/messages` succeeds online.
+  Future<void> upsertCachedMessages(List<AiMessagesCacheCompanion> rows) async {
+    await batch((b) => b.insertAllOnConflictUpdate(aiMessagesCache, rows));
+  }
+
+  Stream<List<AiMessagesCacheData>> watchCachedMessages(String conversationId) =>
+      (select(aiMessagesCache)
+            ..where((t) => t.conversationId.equals(conversationId))
+            ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+          .watch();
+
+  // --- Local activity notifications -----------------------------------------
+
+  Future<void> addNotification({
+    required String type,
+    required String title,
+    required String body,
+  }) async {
+    await into(localNotifications).insert(LocalNotificationsCompanion.insert(
+      id: DateTime.now().toUtc().microsecondsSinceEpoch.toString(),
+      type: type,
+      title: title,
+      body: body,
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+    ));
+  }
+
+  Stream<List<LocalNotification>> watchNotifications({int limit = 50}) =>
+      (select(localNotifications)
+            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+            ..limit(limit))
+          .watch();
+
+  Stream<int> watchUnreadNotificationCount() {
+    final query = selectOnly(localNotifications)
+      ..addColumns([localNotifications.id.count()])
+      ..where(localNotifications.readAt.isNull());
+    return query.watchSingle().map((row) => row.read(localNotifications.id.count()) ?? 0);
+  }
+
+  Future<void> markNotificationRead(String id) =>
+      (update(localNotifications)..where((t) => t.id.equals(id)))
+          .write(LocalNotificationsCompanion(readAt: Value(DateTime.now().toUtc().toIso8601String())));
+
+  Future<void> markAllNotificationsRead() async {
+    await (update(localNotifications)..where((t) => t.readAt.isNull()))
+        .write(LocalNotificationsCompanion(readAt: Value(DateTime.now().toUtc().toIso8601String())));
   }
 }

@@ -41,7 +41,7 @@ class _MobileLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const HomeHeader().animate().fadeIn(duration: 300.ms),
+        const HomeHeader(showBellAndProfile: true).animate().fadeIn(duration: 300.ms),
         const SizedBox(height: AppSpacing.lg),
         const Align(alignment: Alignment.centerLeft, child: SyncStatusLine()),
         const SizedBox(height: AppSpacing.lg),
@@ -93,7 +93,7 @@ class _DesktopLayout extends StatelessWidget {
                 children: [
                   SectionHeader(title: 'Resources'),
                   const SizedBox(height: AppSpacing.md),
-                  const QuickActionsGrid(crossAxisCount: 2),
+                  const QuickActionsGrid(),
                 ],
               ),
             ),

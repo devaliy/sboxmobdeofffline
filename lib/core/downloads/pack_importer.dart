@@ -290,6 +290,14 @@ class PackImporter {
 
   String? _rewrite(String domain, String? zipRelativePath) {
     if (zipRelativePath == null) return null;
+    // The real backend serializes an absent image as the literal string
+    // "questions/None" (a server-side `?? 'None'` fallback baked into the
+    // API response) rather than omitting the field or sending null
+    // outright — observed directly in production pack.json responses.
+    // Treated the same as "no image" here; otherwise every question
+    // without a real image ends up with a bogus imagePath pointing at a
+    // file that will never exist.
+    if (p.basename(zipRelativePath) == 'None') return null;
     return p.join('content', domain, 'images', zipRelativePath);
   }
 }

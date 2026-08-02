@@ -83,7 +83,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       title: _done ? 'Password reset' : 'Reset password',
       subtitle: _done
           ? 'You can log in with your new password now.'
-          : (_otpRequested ? 'Enter the code we sent and a new password.' : 'Enter your email or phone number.'),
+          : (_otpRequested ? 'Enter the code we sent and a new password.' : 'Enter your email address.'),
       child: _done ? _buildDone(context) : _buildForm(context),
     );
   }
@@ -105,7 +105,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           TextFormField(
             controller: _identifierCtrl,
             enabled: !_otpRequested,
-            decoration: const InputDecoration(labelText: 'Email or phone number'),
+            keyboardType: TextInputType.emailAddress,
+            // Password reset is email-only on the real backend — unlike
+            // login, there's no phone-number lookup for this endpoint
+            // (API_DOCUMENTATION.md Section 2).
+            decoration: const InputDecoration(labelText: 'Email address'),
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
           ),
           if (_otpRequested) ...[

@@ -94,9 +94,9 @@ void main() {
     expect(find.text('Get your content'), findsOneWidget);
     expect(find.text('JSS2 Mathematics'), findsOneWidget);
 
-    await tester.tap(find.text('JSS2 Mathematics'));
-    await tester.pump();
-    await tester.tap(find.textContaining('Download 1 selected'));
+    // The primary one-click affordance, not the individual card tap —
+    // covered separately by the other flow tests.
+    await tester.tap(find.textContaining('Download all'));
     await waitForDownload(tester);
     // PackCard's installed state (M9) shows a version tag + a remove
     // action rather than a plain "Installed" label.
@@ -105,8 +105,6 @@ void main() {
     await tester.tap(find.text('Assessment'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Physics'));
-    await tester.pump();
-    await tester.tap(find.textContaining('Download 1 selected'));
     await waitForDownload(tester);
 
     // At least one (here, both) domain installed unlocks Home.

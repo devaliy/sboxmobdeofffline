@@ -15,7 +15,7 @@ class AppTopNav extends StatelessWidget implements PreferredSizeWidget {
   final ValueChanged<int> onTap;
 
   @override
-  Size get preferredSize => const Size.fromHeight(68);
+  Size get preferredSize => const Size.fromHeight(76);
 
   @override
   Widget build(BuildContext context) {
@@ -33,31 +33,42 @@ class AppTopNav extends StatelessWidget implements PreferredSizeWidget {
             const SizedBox(width: AppSpacing.xxl),
             const AppLogoMark(),
             const SizedBox(width: AppSpacing.xxxl),
-            // Expanded + horizontal scroll rather than a bare Row: at a
-            // large system text scale (spec Section 9) five nav labels can
-            // outgrow even the 900px desktop breakpoint's width — this
-            // degrades to scrolling instead of overflowing off-screen.
+            // LayoutBuilder + a min-width-pinned-to-viewport wrapper: nav
+            // items are centered in the bar when they fit, but at a large
+            // system text scale (spec Section 9) five stacked icon+label
+            // items can still outgrow even the 900px desktop breakpoint's
+            // width — this degrades to a left-anchored horizontal scroll
+            // instead of overflowing off-screen, rather than losing that
+            // safety net for the sake of centering.
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (var i = 0; i < kMainNavItems.length; i++)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                        child: _TopNavTab(
-                          item: kMainNavItems[i],
-                          selected: i == currentIndex,
-                          onTap: () => onTap(i),
-                        ),
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var i = 0; i < kMainNavItems.length; i++)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                              child: _TopNavTab(
+                                item: kMainNavItems[i],
+                                selected: i == currentIndex,
+                                onTap: () => onTap(i),
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
+                    ),
+                  ),
                 ),
               ),
             ),
-            const _NotificationBell(),
+            const NotificationBell(),
             const SizedBox(width: AppSpacing.lg),
-            const _ProfileChip(),
+            const ProfileMenuButton(),
             const SizedBox(width: AppSpacing.xxl),
           ],
         ),
@@ -87,23 +98,23 @@ class _TopNavTab extends StatelessWidget {
       // height doesn't help since InkWell only hit-tests its own child,
       // not the row's full height.
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 44),
+        constraints: const BoxConstraints(minHeight: 44, minWidth: 64),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
           decoration: BoxDecoration(
             color: selected
                 ? AppColors.signalOrange.withValues(alpha: isDark ? 0.18 : 0.12)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          child: Row(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(item.icon, size: 19, color: fg),
-              const SizedBox(width: AppSpacing.sm),
-              Text(item.label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: fg)),
+              Icon(item.icon, size: 26, color: fg),
+              const SizedBox(height: 4),
+              Text(item.label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: fg)),
             ],
           ),
         ),
@@ -112,45 +123,12 @@ class _TopNavTab extends StatelessWidget {
   }
 }
 
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell();
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Icon(Icons.notifications_none_rounded, color: isDark ? Colors.white70 : AppColors.inkNavy);
-  }
-}
-
-class _ProfileChip extends StatelessWidget {
-  const _ProfileChip();
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const CircleAvatar(
-          radius: 16,
-          backgroundColor: AppColors.brandBlue,
-          child: Icon(Icons.person, color: Colors.white, size: 18),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Text('Student', style: textTheme.labelMedium),
-        const SizedBox(width: AppSpacing.xs),
-        const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-      ],
-    );
-  }
-}
-
-/// Compact monogram-only mark for the top nav's leading brand slot.
+/// The real logo, sized for the top nav's leading brand slot.
 class AppLogoMark extends StatelessWidget {
   const AppLogoMark({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const AppMonogram(size: 32, glow: false);
+    return const AppLogo(width: 120);
   }
 }

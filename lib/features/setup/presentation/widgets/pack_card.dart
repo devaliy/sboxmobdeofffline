@@ -5,27 +5,26 @@ import '../../../../shared/widgets/widgets.dart';
 import '../../application/setup_controller.dart';
 import '../../domain/content_pack_manifest.dart';
 
-/// One downloadable pack, in every state it can be in: selectable,
-/// downloading (with a live progress ring), installed, or failed with a
-/// retry action. Reused by both the Study and Assessment panels.
+/// One downloadable pack, in every state it can be in: idle (tap to
+/// download just this one), downloading (with a live progress ring),
+/// installed, or failed with a retry action. Reused by both the Study and
+/// Assessment panels. No manual selection concept — both panels default to
+/// a single "download all" action; tapping an individual idle/failed card
+/// is a shortcut for "start just this one" rather than a checkbox.
 class PackCard extends StatelessWidget {
   const PackCard({
     super.key,
     required this.pack,
     required this.installed,
-    required this.selected,
     required this.downloadState,
-    required this.onToggleSelected,
-    required this.onRetry,
+    required this.onDownload,
     this.onRemove,
   });
 
   final ManifestPackEntry pack;
   final bool installed;
-  final bool selected;
   final PackDownloadState? downloadState;
-  final ValueChanged<bool> onToggleSelected;
-  final VoidCallback onRetry;
+  final VoidCallback onDownload;
 
   /// Null when this card is shown outside "Manage downloaded content"
   /// (e.g. first-run Setup) — removal is a management-mode-only action.
@@ -39,10 +38,7 @@ class PackCard extends StatelessWidget {
     final busy = phase == PackPhase.downloading || phase == PackPhase.importing;
 
     return GlowCard(
-      onTap: (installed || busy) ? null : () => onToggleSelected(!selected),
-      border: selected
-          ? const BorderSide(color: AppColors.signalOrange, width: 1.6)
-          : null,
+      onTap: (installed || busy) ? null : onDownload,
       child: Row(
         children: [
           _leading(phase),
@@ -97,11 +93,7 @@ class PackCard extends StatelessWidget {
     if (phase == PackPhase.downloading || phase == PackPhase.importing) {
       return AnimatedProgressRing(progress: downloadState?.progress ?? 0, size: 40, strokeWidth: 4);
     }
-    return PastelIconBadge(
-      icon: selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-      hue: selected ? AppColors.coral : AppColors.sky,
-      size: 40,
-    );
+    return const PastelIconBadge(icon: Icons.download_rounded, hue: AppColors.sky, size: 40);
   }
 
   Widget? _trailing(BuildContext context, PackPhase phase) {
@@ -123,7 +115,7 @@ class PackCard extends StatelessWidget {
       );
     }
     if (phase == PackPhase.failed) {
-      return TextButton(onPressed: onRetry, child: const Text('Retry'));
+      return TextButton(onPressed: onDownload, child: const Text('Retry'));
     }
     return null;
   }

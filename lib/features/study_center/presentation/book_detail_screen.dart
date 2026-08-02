@@ -6,9 +6,14 @@ import '../../../core/router/app_routes.dart';
 import '../../../core/theme/theme.dart';
 import '../../../shared/widgets/widgets.dart';
 import '../application/study_center_providers.dart';
+import 'widgets/desktop_book_reader.dart';
 import 'widgets/subject_row.dart';
 
-/// Subject/week list for one book, grouped by term (spec Section 7).
+/// Subject/week list for one book, grouped by term (spec Section 7) on
+/// mobile. On desktop, opening a book lands directly in the combined
+/// topics-sidebar + reader view instead (`DesktopBookReader`) — matching
+/// the desktop mockup's "open a book, you're already reading it" flow
+/// rather than requiring a second tap through an intermediate list.
 class BookDetailScreen extends ConsumerWidget {
   const BookDetailScreen({super.key, required this.bookId});
 
@@ -38,28 +43,36 @@ class BookDetailScreen extends ConsumerWidget {
             );
           }
 
-          final grouped = <int, List<LibrarySubject>>{};
-          for (final subject in subjects) {
-            grouped.putIfAbsent(subject.termId, () => []).add(subject);
-          }
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth >= AppBreakpoints.desktop) {
+                return DesktopBookReader(bookId: bookId, subjects: subjects);
+              }
 
-          return ListView(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            children: [
-              for (final entry in grouped.entries) ...[
-                SectionHeader(title: termNameById[entry.key] ?? 'Term'),
-                const SizedBox(height: AppSpacing.md),
-                for (final subject in entry.value)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: SubjectRow(
-                      subject: subject,
-                      onTap: () => context.push(AppRoutes.studySubject(bookId, subject.id)),
-                    ),
-                  ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-            ],
+              final grouped = <int, List<LibrarySubject>>{};
+              for (final subject in subjects) {
+                grouped.putIfAbsent(subject.termId, () => []).add(subject);
+              }
+
+              return ListView(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                children: [
+                  for (final entry in grouped.entries) ...[
+                    SectionHeader(title: termNameById[entry.key] ?? 'Term'),
+                    const SizedBox(height: AppSpacing.md),
+                    for (final subject in entry.value)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: SubjectRow(
+                          subject: subject,
+                          onTap: () => context.push(AppRoutes.studySubject(bookId, subject.id)),
+                        ),
+                      ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                ],
+              );
+            },
           );
         },
       ),

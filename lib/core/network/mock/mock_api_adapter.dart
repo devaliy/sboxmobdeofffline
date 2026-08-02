@@ -90,7 +90,14 @@ class MockApiAdapter implements HttpClientAdapter {
     if (method == 'POST' && path == '/sync/reading-progress') {
       return _syncReadingProgress(auth, body!);
     }
-    if (method == 'GET' && path == '/sync/status') return _json({'last_synced_at': null}, 200);
+    if (method == 'GET' && path == '/sync/status') return _syncStatus(auth);
+
+    if (method == 'POST' && path == '/ai/chat') return _aiChat(auth, body!);
+    if (method == 'GET' && path == '/ai/conversations') return _aiConversations(auth);
+    final aiMessagesMatch = RegExp(r'^/ai/conversations/([^/]+)/messages$').firstMatch(path);
+    if (method == 'GET' && aiMessagesMatch != null) {
+      return _aiMessages(auth, aiMessagesMatch.group(1)!);
+    }
 
     throw MockApiException(404, 'Mock backend: no route for $method $path');
   }
@@ -99,9 +106,13 @@ class MockApiAdapter implements HttpClientAdapter {
 
   Future<ResponseBody> _register(Map<String, dynamic> body) async {
     final email = body['email'] as String;
-    final phone = body['phone_number'] as String;
+    final phone = body['phone_number'] as String?;
+    final userType = body['user_type'] as String? ?? 'student';
     if (_store.identifierTaken(email, phone)) {
       throw MockApiException(422, 'An account with that email or phone number already exists.');
+    }
+    if (userType != 'parent' && body['current_class_id'] == null) {
+      throw MockApiException(422, 'The current class id field is required.');
     }
     final user = _store.createUser(
       firstName: body['firstname'] as String,
@@ -109,18 +120,22 @@ class MockApiAdapter implements HttpClientAdapter {
       email: email,
       phoneNumber: phone,
       password: body['password'] as String,
-      currentClassId: body['current_class_id'] as int,
+      userType: userType,
+      currentClassId: body['current_class_id'] as int?,
     );
     final token = _store.issueToken(user.id);
     return _json({'user': user.toJson(), 'token': token}, 201);
   }
 
   Future<ResponseBody> _login(Map<String, dynamic> body) async {
-    final identifier = (body['email'] ?? body['phone_number'] ?? body['identifier']) as String;
+    // Real clients only ever send `identifier` (API_DOCUMENTATION.md
+    // Section 2) — it accepts either an email or a phone number, checked
+    // against both columns server-side.
+    final identifier = body['identifier'] as String;
     final password = body['password'] as String;
     final user = _store.findByLoginIdentifier(identifier);
     if (user == null || user.password != password) {
-      throw MockApiException(401, 'Incorrect email/phone or password.');
+      throw MockApiException(401, 'The provided credentials are incorrect.');
     }
     final token = _store.issueToken(user.id);
     return _json({'user': user.toJson(), 'token': token}, 200);
@@ -128,30 +143,36 @@ class MockApiAdapter implements HttpClientAdapter {
 
   Future<ResponseBody> _logout(String? auth) async {
     _store.revokeToken(auth);
-    return _json({}, 200);
+    return _json({'message': 'Logged out.'}, 200);
   }
 
   Future<ResponseBody> _forgotPassword(Map<String, dynamic> body) async {
-    final identifier = (body['email'] ?? body['phone_number']) as String;
-    if (_store.findByLoginIdentifier(identifier) == null) {
-      throw MockApiException(404, 'No account found for that email/phone.');
+    final email = body['email'] as String;
+    // A real backend always responds 200 regardless of whether the email
+    // exists, to avoid leaking registered addresses — the mock matches
+    // that rather than 404ing, so client code is never tempted to branch
+    // on "account not found" here.
+    String? otp;
+    if (_store.findByLoginIdentifier(email) != null) {
+      otp = _store.issueOtp(email);
     }
-    final otp = _store.issueOtp(identifier);
-    // A real backend sends this by SMS/email; the mock hands it back so the
-    // dev UI can display "Your OTP (mock): 1234" instead of a real inbox.
-    return _json({'message': 'OTP sent', 'debug_otp': otp}, 200);
+    return _json({
+      'message': 'If an account exists for that email, a reset code has been sent.',
+      'debug_otp': ?otp,
+    }, 200);
   }
 
   Future<ResponseBody> _resetPassword(Map<String, dynamic> body) async {
-    final identifier = (body['email'] ?? body['phone_number']) as String;
+    final email = body['email'] as String;
     final otp = body['otp'] as String;
-    final newPassword = body['new_password'] as String;
-    if (!_store.verifyAndConsumeOtp(identifier, otp)) {
-      throw MockApiException(422, 'Invalid or expired OTP.');
+    final newPassword = body['password'] as String;
+    if (!_store.verifyAndConsumeOtp(email, otp)) {
+      throw MockApiException(422, 'That code is invalid or has expired.');
     }
-    final user = _store.findByLoginIdentifier(identifier);
-    if (user == null) throw MockApiException(404, 'No account found for that email/phone.');
+    final user = _store.findByLoginIdentifier(email);
+    if (user == null) throw MockApiException(404, 'No account found for that email.');
     user.password = newPassword;
+    _store.revokeAllTokensForUser(user.id);
     return _json({'message': 'Password reset'}, 200);
   }
 
@@ -166,6 +187,9 @@ class MockApiAdapter implements HttpClientAdapter {
     if (user == null) throw MockApiException(401, 'Session expired.');
     if (body['current_class_id'] != null) user.currentClassId = body['current_class_id'] as int;
     if (body['phone_number'] != null) user.phoneNumber = body['phone_number'] as String;
+    if (body['firstname'] != null) user.firstName = body['firstname'] as String;
+    if (body['lastname'] != null) user.lastName = body['lastname'] as String;
+    if (body['email'] != null) user.email = body['email'] as String;
     return _json({'user': user.toJson()}, 200);
   }
 
@@ -233,6 +257,44 @@ class MockApiAdapter implements HttpClientAdapter {
         for (final p in progress) {'id': p['library_subject_id'], 'status': 'synced'},
       ],
     }, 200);
+  }
+
+  Future<ResponseBody> _syncStatus(String? auth) async {
+    if (_store.userForToken(auth) == null) throw MockApiException(401, 'Session expired.');
+    final now = DateTime.now().toUtc().toIso8601String();
+    return _json({
+      'practice_attempts': {
+        'count': _store.receivedPracticeAttempts.length,
+        'last_received_at': _store.receivedPracticeAttempts.isEmpty ? null : now,
+      },
+      'reading_progress': {
+        'count': _store.receivedReadingProgress.length,
+        'last_received_at': _store.receivedReadingProgress.isEmpty ? null : now,
+      },
+    }, 200);
+  }
+
+  // --- SuccessAI ---------------------------------------------------------------
+
+  Future<ResponseBody> _aiChat(String? auth, Map<String, dynamic> body) async {
+    final user = _store.userForToken(auth);
+    if (user == null) throw MockApiException(401, 'Session expired.');
+    final message = body['message'] as String;
+    final conversationId = body['conversation_id'] as String?;
+    final result = _store.sendAiMessage(userId: user.id, conversationId: conversationId, text: message);
+    return _json(result, 200);
+  }
+
+  Future<ResponseBody> _aiConversations(String? auth) async {
+    final user = _store.userForToken(auth);
+    if (user == null) throw MockApiException(401, 'Session expired.');
+    return _json({'conversations': _store.conversationsFor(user.id)}, 200);
+  }
+
+  Future<ResponseBody> _aiMessages(String? auth, String conversationId) async {
+    final user = _store.userForToken(auth);
+    if (user == null) throw MockApiException(401, 'Session expired.');
+    return _json({'messages': _store.messagesFor(conversationId)}, 200);
   }
 
   // --- Helpers ---------------------------------------------------------------

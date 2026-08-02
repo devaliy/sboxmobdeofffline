@@ -33,6 +33,14 @@ List<Override> testProviderOverrides() {
   SharedPreferences.setMockInitialValues({});
 
   return [
+    // The app's own default now points at the real backend
+    // (api_client.dart) — tests must never touch it regardless of that
+    // default, both because it isn't a stable fixture to assert against
+    // and because a few tests genuinely call `register()`, which would
+    // create real accounts on a live server. This is the one override
+    // every other override in this list — and every test in the suite —
+    // implicitly depends on.
+    useMockBackendProvider.overrideWithValue(true),
     secureSessionStoreProvider.overrideWithValue(InMemorySecureSessionStore()),
     progressDbProvider.overrideWith(
       (ref, userId) => ProgressDb.forTesting(NativeDatabase.memory()),

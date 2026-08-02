@@ -149,6 +149,12 @@ class StudyContentDb extends _$StudyContentDb {
   Future<List<LibraryQuestion>> questionsForSubject(int librarySubjectId) =>
       (select(libraryQuestions)..where((t) => t.librarySubjectId.equals(librarySubjectId))).get();
 
+  Future<LibraryQuestion?> questionById(int id) =>
+      (select(libraryQuestions)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<LibrarySubject?> librarySubjectById(int id) =>
+      (select(librarySubjects)..where((t) => t.id.equals(id))).getSingleOrNull();
+
   Stream<List<InstalledStudyPack>> watchInstalledPacks() => select(installedStudyPacks).watch();
 
   Future<bool> isBookInstalled(int libraryBookId) async {

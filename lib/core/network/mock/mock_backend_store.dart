@@ -32,7 +32,8 @@ class MockBackendStore {
         email: 'jane@demo.ng',
         phoneNumber: '+2348012340001',
         password: 'password123',
-        currentClassId: 8, // JSS 2
+        currentClassId: 2, // JSS 2 (real backend id — see ng_classes.dart)
+        studentLinkCode: 'JDA-1001',
       ),
       MockUser(
         id: 2,
@@ -41,7 +42,8 @@ class MockBackendStore {
         email: 'musa@demo.ng',
         phoneNumber: '+2348012340002',
         password: 'password123',
-        currentClassId: 10, // SS 1
+        currentClassId: 4, // SSS 1 (real backend id — see ng_classes.dart)
+        studentLinkCode: 'MBE-1002',
       ),
     ]);
   }
@@ -60,16 +62,27 @@ class MockBackendStore {
     return null;
   }
 
-  bool identifierTaken(String email, String phone) =>
-      users.any((u) => u.email == email || u.phoneNumber == phone);
+  bool identifierTaken(String email, String? phone) =>
+      users.any((u) => u.email == email || (phone != null && u.phoneNumber == phone));
+
+  /// `student_link_code` (API_DOCUMENTATION.md Section 2) is generated
+  /// automatically at registration and is only ever set for students —
+  /// mirrored here so the mock's registration response looks like a real
+  /// one without the client having to special-case dev vs. production.
+  String _generateLinkCode(String firstName, String lastName) {
+    final initials =
+        (firstName.isNotEmpty ? firstName[0] : 'X') + (lastName.length >= 2 ? lastName.substring(0, 2) : 'XX');
+    return '${initials.toUpperCase()}-${1000 + _random.nextInt(9000)}';
+  }
 
   MockUser createUser({
     required String firstName,
     required String lastName,
     required String email,
-    required String phoneNumber,
+    String? phoneNumber,
     required String password,
-    required int currentClassId,
+    String userType = 'student',
+    int? currentClassId,
   }) {
     final user = MockUser(
       id: _nextUserId++,
@@ -78,7 +91,9 @@ class MockBackendStore {
       email: email,
       phoneNumber: phoneNumber,
       password: password,
+      userType: userType,
       currentClassId: currentClassId,
+      studentLinkCode: userType == 'student' ? _generateLinkCode(firstName, lastName) : null,
     );
     users.add(user);
     return user;
@@ -103,6 +118,13 @@ class MockBackendStore {
     _tokenToUserId.remove(bearerHeader.substring('Bearer '.length));
   }
 
+  /// A successful password reset revokes every token for that account
+  /// (API_DOCUMENTATION.md Section 2) — every other signed-in device, not
+  /// just the one making this request, per the real backend's behavior.
+  void revokeAllTokensForUser(int userId) {
+    _tokenToUserId.removeWhere((_, id) => id == userId);
+  }
+
   String issueOtp(String identifier) {
     final otp = (1000 + _random.nextInt(9000)).toString();
     _pendingOtps[identifier] = otp;
@@ -122,13 +144,74 @@ class MockBackendStore {
   final List<Map<String, dynamic>> receivedPracticeAttempts = [];
   final List<Map<String, dynamic>> receivedReadingProgress = [];
 
+  // --- SuccessAI -------------------------------------------------------------
+
+  /// Per-user conversation lists — keyed by user id, same isolation
+  /// guarantee as everything else per-account in this mock (two accounts
+  /// signed in on one device/session must never see each other's chats).
+  final Map<int, List<Map<String, dynamic>>> _aiConversations = {};
+  final Map<String, List<Map<String, dynamic>>> _aiMessages = {};
+  int _nextAiConversationId = 1;
+  int _nextAiMessageId = 1;
+
+  List<Map<String, dynamic>> conversationsFor(int userId) =>
+      List.unmodifiable((_aiConversations[userId] ?? const []).reversed);
+
+  List<Map<String, dynamic>> messagesFor(String conversationId) =>
+      List.unmodifiable(_aiMessages[conversationId] ?? const []);
+
+  /// Canned reply so a test can assert on real (if scripted) chat
+  /// behaviour without hitting any real AI provider — this mock never
+  /// makes an outbound call of its own, matching the real backend's role
+  /// as the only thing that ever talks to OpenRouter.
+  Map<String, dynamic> sendAiMessage({required int userId, String? conversationId, required String text}) {
+    final now = DateTime.now().toUtc().toIso8601String();
+    var convId = conversationId;
+    if (convId == null) {
+      convId = 'conv-${_nextAiConversationId++}';
+      (_aiConversations[userId] ??= []).add({
+        'id': convId,
+        'title': text.length > 40 ? '${text.substring(0, 40)}…' : text,
+        'updated_at': now,
+        'last_message': text,
+      });
+    } else {
+      final conv = (_aiConversations[userId] ?? []).firstWhere((c) => c['id'] == convId);
+      conv['updated_at'] = now;
+      conv['last_message'] = text;
+    }
+
+    final userMessage = {
+      'id': 'msg-${_nextAiMessageId++}',
+      'conversation_id': convId,
+      'content': text,
+      'is_ai': false,
+      'sender': 'You',
+      'created_at': now,
+    };
+    final aiMessage = {
+      'id': 'msg-${_nextAiMessageId++}',
+      'conversation_id': convId,
+      'content': 'Mock SuccessAI reply to: $text',
+      'is_ai': true,
+      'sender': 'SuccessAI',
+      'created_at': now,
+    };
+    (_aiMessages[convId] ??= []).addAll([userMessage, aiMessage]);
+
+    return {
+      'conversation_id': convId,
+      'messages': [userMessage, aiMessage],
+    };
+  }
+
   // --- Content: manifest + packs --------------------------------------------
 
   late final BuiltPack studyPack;
   late final BuiltPack assessmentPack;
 
   static const studyBookScopeId = 12;
-  static const studyClassScopeId = 8; // JSS 2, matches kClassOptions
+  static const studyClassScopeId = 2; // JSS 2, matches kClassOptions' real backend id
   static const assessmentSubjectScopeId = 7;
 
   void _seedContent() {
@@ -211,16 +294,13 @@ class MockBackendStore {
       yearsJson: const [
         {'id': 55, 'subject_id': assessmentSubjectScopeId, 'year_name': '2019'},
       ],
-      testTypesJson: const [
-        {
-          'id': 3,
-          'test_type_name': 'JAMB Practice',
-          'duration_minutes': 40,
-          'num_of_questions': 4,
-          'subject_id': assessmentSubjectScopeId,
-          'assoc_category_id': 2,
-        },
-      ],
+      // Empty, matching real production data — pulling pack.json directly
+      // from the live backend across every installed subject (and a broad
+      // catalog sample) confirmed `test_types` is `[]` everywhere; it's
+      // never been populated server-side. The client offers a fixed pair
+      // of formats (`PracticeTestType`) instead, applied against whatever
+      // subject+category the student picks — see practice_test_type.dart.
+      testTypesJson: const [],
       passagesJson: const [
         {
           'id': 60001,
@@ -241,9 +321,12 @@ class MockBackendStore {
           'category_id': 2,
           'year_id': 55,
           'passage_id': null,
-          'test_type_id': 3,
+          'test_type_id': null,
           'question_text': 'What is the acceleration due to gravity (approx.)?',
-          'image': null,
+          // The real backend serializes an absent image as the literal
+          // string "questions/None", not null — mirrored here so the
+          // importer's handling of that sentinel is genuinely exercised.
+          'image': 'questions/None',
           'option_a': '9.8 m/s²',
           'option_b': '10.8 m/s²',
           'option_c': '8.8 m/s²',
@@ -258,9 +341,9 @@ class MockBackendStore {
           'category_id': 2,
           'year_id': 55,
           'passage_id': null,
-          'test_type_id': 3,
+          'test_type_id': null,
           'question_text': 'The SI unit of force is:',
-          'image': null,
+          'image': 'questions/diagram.png',
           'option_a': 'Joule',
           'option_b': 'Newton',
           'option_c': 'Watt',
@@ -275,7 +358,7 @@ class MockBackendStore {
           'category_id': 2,
           'year_id': 55,
           'passage_id': 60001,
-          'test_type_id': 3,
+          'test_type_id': null,
           'question_text': 'According to the passage, a body in motion stays in motion unless:',
           'image': null,
           'option_a': 'It runs out of energy',
@@ -292,7 +375,7 @@ class MockBackendStore {
           'category_id': 2,
           'year_id': 55,
           'passage_id': 60001,
-          'test_type_id': 3,
+          'test_type_id': null,
           'question_text': 'Per the passage, Newton\'s second law is expressed as:',
           'image': null,
           'option_a': 'F = ma',

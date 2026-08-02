@@ -7,11 +7,20 @@ import '../../../shared/widgets/widgets.dart';
 import '../application/study_center_providers.dart';
 import 'widgets/book_cover_card.dart';
 
-/// Book grid — Study Center's entry point (spec Section 7), scoped to
-/// whatever's actually installed. Empty state if the student skipped the
+/// Book shelf — Study Center's entry point (spec Section 7), scoped to
+/// whatever's actually installed: a "Recently Read" shelf (most recently
+/// opened books first) above the full "All Books" grid, matching the
+/// mockups' bookshelf layout. Empty state if the student skipped the
 /// Study domain in Setup.
 class StudyCenterScreen extends ConsumerWidget {
   const StudyCenterScreen({super.key});
+
+  static const _gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
+    maxCrossAxisExtent: 130,
+    mainAxisSpacing: AppSpacing.lg,
+    crossAxisSpacing: AppSpacing.lg,
+    childAspectRatio: 0.66,
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -20,19 +29,14 @@ class StudyCenterScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Study Center')),
       body: booksAsync.when(
-        loading: () => GridView.count(
-          crossAxisCount: 2,
+        loading: () => GridView.builder(
           padding: const EdgeInsets.all(AppSpacing.xl),
-          mainAxisSpacing: AppSpacing.lg,
-          crossAxisSpacing: AppSpacing.lg,
-          childAspectRatio: 0.72,
-          children: List.generate(
-            4,
-            (_) => ShimmerBlock(
-              width: double.infinity,
-              height: double.infinity,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
+          gridDelegate: _gridDelegate,
+          itemCount: 6,
+          itemBuilder: (context, i) => ShimmerBlock(
+            width: double.infinity,
+            height: double.infinity,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
         ),
         error: (e, st) => EmptyState(
@@ -51,23 +55,63 @@ class StudyCenterScreen extends ConsumerWidget {
             );
           }
 
-          return GridView.builder(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: AppSpacing.lg,
-              crossAxisSpacing: AppSpacing.lg,
-              childAspectRatio: 0.72,
-            ),
-            itemCount: books.length,
-            itemBuilder: (context, i) {
-              final book = books[i];
-              return BookCoverCard(
-                name: book.name,
-                colorHex: book.color,
-                onTap: () => context.push(AppRoutes.studyBook(book.id)),
-              );
-            },
+          final recentAsync = ref.watch(recentlyReadBooksProvider);
+          final recentBooks = recentAsync.valueOrNull ?? const [];
+
+          return CustomScrollView(
+            slivers: [
+              if (recentBooks.isNotEmpty) ...[
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.xl, AppSpacing.xl, 0),
+                  sliver: SliverToBoxAdapter(child: SectionHeader(title: 'Recently Read')),
+                ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 190,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.md, AppSpacing.xl, 0),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: recentBooks.length,
+                      separatorBuilder: (context, i) => const SizedBox(width: AppSpacing.lg),
+                      itemBuilder: (context, i) {
+                        final book = recentBooks[i];
+                        return SizedBox(
+                          width: 120,
+                          child: BookCoverCard(
+                            name: book.name,
+                            colorHex: book.color,
+                            imagePath: book.imagePath,
+                            onTap: () => context.push(AppRoutes.studyBook(book.id)),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.xl, AppSpacing.xl, 0),
+                sliver: SliverToBoxAdapter(child: SectionHeader(title: 'All Books')),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                sliver: SliverGrid(
+                  gridDelegate: _gridDelegate,
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) {
+                      final book = books[i];
+                      return BookCoverCard(
+                        name: book.name,
+                        colorHex: book.color,
+                        imagePath: book.imagePath,
+                        onTap: () => context.push(AppRoutes.studyBook(book.id)),
+                      );
+                    },
+                    childCount: books.length,
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),

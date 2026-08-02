@@ -1,8 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'assessment_content_db.dart';
+import 'db_paths.dart';
 import 'progress_db.dart';
 import 'study_content_db.dart';
+
+/// Resolved once and cached for the app's lifetime (no `.autoDispose`) —
+/// every local content image (`imagePath`/`coverImagePath`, stored relative
+/// to this dir per [DbPaths]) needs it, and it's a platform-channel call
+/// not worth repeating per widget build.
+final documentsDirProvider = FutureProvider<Directory>((ref) => DbPaths.documentsDir());
 
 /// Long-lived: one instance for the app's lifetime, shared across whichever
 /// accounts use this device (spec Section 3.1 — content is device-scoped,

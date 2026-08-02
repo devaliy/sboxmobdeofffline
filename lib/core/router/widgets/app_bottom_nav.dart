@@ -101,7 +101,7 @@ class _NavButton extends StatelessWidget {
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
             style: Theme.of(context).textTheme.labelSmall!.copyWith(color: color),
-            child: Text(item.label),
+            child: Text(item.label, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis),
           ),
         ],
       ),

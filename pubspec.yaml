@@ -42,6 +42,9 @@ dependencies:
   # Study Center content rendering
   flutter_html: ^3.0.0-beta.2
 
+  # Reader's "read aloud" control
+  flutter_tts: ^4.2.2
+
   # Charts (Progress tab)
   fl_chart: ^0.70.2
 
@@ -82,7 +85,6 @@ flutter:
 
   assets:
     - assets/branding/
-    - sboxscreens/SuccessBOX-Logo.png
 
   fonts:
     - family: Poppins

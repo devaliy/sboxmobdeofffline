@@ -54,8 +54,6 @@ void main() {
 
     expect(find.text('JSS2 Mathematics'), findsOneWidget);
     await tester.tap(find.text('JSS2 Mathematics'));
-    await tester.pump();
-    await tester.tap(find.textContaining('Download 1 selected'));
     await waitForDownload(tester);
     // PackCard's installed state (M9) shows a version tag + a remove
     // action rather than a plain "Installed" label.

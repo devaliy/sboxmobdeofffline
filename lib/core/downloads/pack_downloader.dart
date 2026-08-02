@@ -12,17 +12,27 @@ import '../db/assessment_content_db.dart';
 import '../db/study_content_db.dart';
 import 'pack_importer.dart';
 
-/// Manifest `download_url` values are full absolute API paths (spec
-/// Section 4.4's example: `/api/v1/content/study/12/pack`) — but `Dio`
-/// joins `baseUrl + path` via plain string concatenation, not URI
-/// resolution, so passing that path straight through double-prefixes it
-/// (`.../api/v1/api/v1/...`) whenever `baseUrl` already ends in `/api/v1`.
-/// This builds the correct absolute URL by replacing `baseUrl`'s path
-/// outright, which also makes `dio` skip the `baseUrl` prefix entirely
-/// (its join logic only activates for paths that *don't* start with a
-/// scheme). Needed against the real backend just as much as the mock.
-Uri resolveApiUri(Dio dio, String pathFromApiRoot) =>
-    Uri.parse(dio.options.baseUrl).replace(path: pathFromApiRoot);
+/// Manifest `download_url` values have been observed in two shapes from the
+/// real backend: a path-only value (spec Section 4.4's example,
+/// `/api/v1/content/study/12/pack`) and, currently, a full absolute URL
+/// (`https://successbox.ng/api/v1/content/study/1/pack`). `Dio` joins
+/// `baseUrl + path` via plain string concatenation, not URI resolution, so
+/// a path-only value passed straight through double-prefixes it
+/// (`.../api/v1/api/v1/...`) whenever `baseUrl` already ends in `/api/v1` —
+/// and blindly forcing *any* value into `baseUrl`'s path component is worse:
+/// feeding an already-absolute URL into `Uri.replace(path: ...)` stuffs the
+/// whole `https://host/...` string into the path segment, producing
+/// `https://successbox.ng/https://successbox.ng/api/v1/...`, a URL Laravel
+/// can't route — it 302s to the homepage, and the app silently downloads
+/// that HTML page instead of the pack (surfacing later as a checksum
+/// failure with no clue why). Handling both shapes here, keyed on whether
+/// the value already parses with a scheme, is what makes this correct
+/// against either shape the backend sends.
+Uri resolveApiUri(Dio dio, String pathFromApiRoot) {
+  final asIs = Uri.parse(pathFromApiRoot);
+  if (asIs.hasScheme) return asIs;
+  return Uri.parse(dio.options.baseUrl).replace(path: pathFromApiRoot);
+}
 
 class PackDownloadException implements Exception {
   PackDownloadException(this.message, {this.recoverable = true});
@@ -58,7 +68,13 @@ class PackDownloader {
     if (!await packsDir.exists()) {
       await packsDir.create(recursive: true);
     }
-    return File(p.join(packsDir.path, '${pack.domain}_${pack.scopeId}.zip.part'));
+    // Keyed by version, not just domain/scopeId: if the server rebuilds
+    // this pack between attempts (a new `content:build-pack` run changes
+    // its checksum and size), a stale partial left over from the old
+    // version must never be treated as resumable against the new one's
+    // expected checksum — that's a guaranteed, silent corruption, not an
+    // edge case worth risking.
+    return File(p.join(packsDir.path, '${pack.domain}_${pack.scopeId}_${pack.version}.zip.part'));
   }
 
   /// Downloads (resuming from any existing partial bytes), verifies the
@@ -100,6 +116,18 @@ class PackDownloader {
       }
     } catch (e) {
       throw PackDownloadException('Download failed: $e');
+    }
+
+    // A stream can end (no exception thrown) without delivering every byte
+    // the manifest promised — e.g. a connection reset mid-transfer. Left
+    // unchecked, that silently truncated body falls straight through to
+    // checksum verification below, where it fails as an *unrecoverable*
+    // "corrupted" error with no automatic retry — masking what's actually
+    // just a dropped connection.
+    if (pack.sizeBytes > 0 && received != pack.sizeBytes) {
+      throw PackDownloadException(
+        'Download failed: connection closed early (got $received of ${pack.sizeBytes} bytes).',
+      );
     }
 
     final bytes = builder.takeBytes();
@@ -149,6 +177,16 @@ class PackDownloader {
           onProgress?.call(received, pack.sizeBytes);
         }
         await sink.flush();
+        // As in the web/in-memory path: a stream can end clean (no thrown
+        // exception) without actually delivering the full byte count — the
+        // partial file on disk is genuinely incomplete, not corrupt. Keep
+        // it and surface this as a *recoverable* failure so the caller's
+        // retry-with-backoff resumes via Range from here, instead of
+        // falling through to checksum verification, failing as
+        // unrecoverable, and throwing away a perfectly good partial.
+        if (pack.sizeBytes > 0 && received != pack.sizeBytes) {
+          throw StateError('connection closed early (got $received of ${pack.sizeBytes} bytes)');
+        }
       } catch (e) {
         await sink.close();
         // Network failure: keep the partial file so the next attempt
