@@ -31,9 +31,17 @@ class BookDetailScreen extends ConsumerWidget {
       body: subjectsAsync.when(
         loading: () => ListView(
           padding: const EdgeInsets.all(AppSpacing.xl),
-          children: const [ShimmerCard(), SizedBox(height: AppSpacing.md), ShimmerCard()],
+          children: const [
+            ShimmerCard(),
+            SizedBox(height: AppSpacing.md),
+            ShimmerCard(),
+          ],
         ),
-        error: (e, st) => EmptyState(icon: Icons.error_outline_rounded, title: 'Couldn\'t load', message: '$e'),
+        error: (e, st) => EmptyState(
+          icon: Icons.error_outline_rounded,
+          title: 'Couldn\'t load',
+          message: '$e',
+        ),
         data: (subjects) {
           if (subjects.isEmpty) {
             return const EmptyState(
@@ -55,7 +63,16 @@ class BookDetailScreen extends ConsumerWidget {
               }
 
               return ListView(
-                padding: const EdgeInsets.all(AppSpacing.xl),
+                // This LayoutBuilder branch only ever renders below the
+                // desktop breakpoint (see the early return above), so the
+                // extra bottom clearance for the shell's floating
+                // AiChatFab is safe unconditionally here.
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xl,
+                  AppSpacing.xl,
+                  AppSpacing.huge * 2 + AppSpacing.lg,
+                ),
                 children: [
                   for (final entry in grouped.entries) ...[
                     SectionHeader(title: termNameById[entry.key] ?? 'Term'),
@@ -65,7 +82,9 @@ class BookDetailScreen extends ConsumerWidget {
                         padding: const EdgeInsets.only(bottom: AppSpacing.md),
                         child: SubjectRow(
                           subject: subject,
-                          onTap: () => context.push(AppRoutes.studySubject(bookId, subject.id)),
+                          onTap: () => context.push(
+                            AppRoutes.studySubject(bookId, subject.id),
+                          ),
                         ),
                       ),
                     const SizedBox(height: AppSpacing.md),

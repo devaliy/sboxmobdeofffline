@@ -32,9 +32,6 @@ dependencies:
   # Auth / secure storage
   flutter_secure_storage: ^9.2.4
 
-  # Background sync
-  workmanager: ^0.6.0
-
   # Content pack download/import
   archive: ^3.6.1
   crypto: ^3.0.6

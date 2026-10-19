@@ -57,6 +57,7 @@ class StudyCenterScreen extends ConsumerWidget {
 
           final recentAsync = ref.watch(recentlyReadBooksProvider);
           final recentBooks = recentAsync.valueOrNull ?? const [];
+          final isDesktop = MediaQuery.sizeOf(context).width >= AppBreakpoints.desktop;
 
           return CustomScrollView(
             slivers: [
@@ -111,6 +112,12 @@ class StudyCenterScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              // Clears the shell's floating AiChatFab, which otherwise sits
+              // on top of the grid's bottom-right cover when scrolled all
+              // the way down. Desktop's FAB has open space to float in, so
+              // it doesn't need this.
+              if (!isDesktop)
+                const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.huge * 2 + AppSpacing.lg)),
             ],
           );
         },

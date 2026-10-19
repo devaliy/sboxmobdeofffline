@@ -42,7 +42,16 @@ class AnalyticsScreen extends ConsumerWidget {
             builder: (context, constraints) {
               final isDesktop = constraints.maxWidth >= AppBreakpoints.desktop;
               return SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.xl),
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.xl,
+                  AppSpacing.xl,
+                  // Extra clearance on mobile so the shell's floating
+                  // AiChatFab doesn't sit on top of the table's last rows
+                  // when scrolled all the way down; desktop's FAB has open
+                  // space to float in, so it doesn't need this.
+                  isDesktop ? AppSpacing.xl : AppSpacing.huge * 2 + AppSpacing.lg,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

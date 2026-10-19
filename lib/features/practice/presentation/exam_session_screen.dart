@@ -55,7 +55,11 @@ class _ExamSessionScreenState extends ConsumerState<ExamSessionScreen> {
       if (_remainingSeconds <= 1) {
         _ticker?.cancel();
         setState(() => _remainingSeconds = 0);
-        _submit(auto: true, questions: _questionsCache!, subject: _subjectCache);
+        _submit(
+          auto: true,
+          questions: _questionsCache!,
+          subject: _subjectCache,
+        );
       } else {
         setState(() => _remainingSeconds--);
       }
@@ -159,12 +163,14 @@ class _ExamSessionScreenState extends ConsumerState<ExamSessionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final questionsAsync = ref.watch(examQuestionsProvider((
-      subjectId: widget.subjectId,
-      categoryId: widget.categoryId,
-      yearId: widget.yearId,
-      limit: widget.testType.numQuestions,
-    )));
+    final questionsAsync = ref.watch(
+      examQuestionsProvider((
+        subjectId: widget.subjectId,
+        categoryId: widget.categoryId,
+        yearId: widget.yearId,
+        limit: widget.testType.numQuestions,
+      )),
+    );
 
     return PopScope(
       canPop: false,
@@ -187,11 +193,14 @@ class _ExamSessionScreenState extends ConsumerState<ExamSessionScreen> {
                 return const EmptyState(
                   icon: Icons.quiz_outlined,
                   title: 'No questions here yet',
-                  message: 'This subject has no questions in the selected category\'s downloaded pack.',
+                  message:
+                      'This subject has no questions in the selected category\'s downloaded pack.',
                 );
               }
               _questionsCache = questions;
-              final subjectAsync = ref.watch(subjectByIdProvider(widget.subjectId));
+              final subjectAsync = ref.watch(
+                subjectByIdProvider(widget.subjectId),
+              );
               _subjectCache = subjectAsync.valueOrNull;
 
               if (!_timerStarted) _startTimer(widget.testType.durationMinutes);
@@ -215,10 +224,18 @@ class _ExamSessionScreenState extends ConsumerState<ExamSessionScreen> {
                     _flagged.add(id);
                   }
                 }),
-                onPrevious: _currentIndex > 0 ? () => setState(() => _currentIndex--) : null,
-                onNext: _currentIndex < questions.length - 1 ? () => setState(() => _currentIndex++) : null,
+                onPrevious: _currentIndex > 0
+                    ? () => setState(() => _currentIndex--)
+                    : null,
+                onNext: _currentIndex < questions.length - 1
+                    ? () => setState(() => _currentIndex++)
+                    : null,
                 onSelectIndex: (index) => setState(() => _currentIndex = index),
-                onSubmit: () => _submit(auto: false, questions: questions, subject: _subjectCache),
+                onSubmit: () => _submit(
+                  auto: false,
+                  questions: questions,
+                  subject: _subjectCache,
+                ),
               );
             },
           ),
@@ -344,6 +361,12 @@ class _ExamBody extends ConsumerWidget {
     final textTheme = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final muted = isDark ? AppColors.textMutedDark : AppColors.textMutedLight;
+    // On mobile the question-number strip moves below the Previous/Next
+    // controls instead of sitting up here under the timer (still built
+    // inline further down, once isDesktop is known from layout
+    // constraints) — desktop keeps it up here, unchanged.
+    final isDesktopScreen =
+        MediaQuery.sizeOf(context).width >= AppBreakpoints.desktop;
 
     return Focus(
       autofocus: true,
@@ -351,11 +374,18 @@ class _ExamBody extends ConsumerWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              0,
+            ),
             child: Text(
               testType.label,
               textAlign: TextAlign.center,
-              style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -365,7 +395,10 @@ class _ExamBody extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             child: Row(
               children: [
-                Text('Time Left', style: textTheme.bodySmall?.copyWith(color: muted)),
+                Text(
+                  'Time Left',
+                  style: textTheme.bodySmall?.copyWith(color: muted),
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
                   _formatTime(remainingSeconds),
@@ -377,7 +410,10 @@ class _ExamBody extends ConsumerWidget {
                 const Spacer(),
                 Text(
                   '${currentIndex + 1}/${questions.length}',
-                  style: textTheme.titleSmall?.copyWith(color: muted, fontWeight: FontWeight.w700),
+                  style: textTheme.titleSmall?.copyWith(
+                    color: muted,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
                 IconButton(
@@ -393,17 +429,21 @@ class _ExamBody extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: _QuestionNumberStrip(
-              questions: questions,
-              currentIndex: currentIndex,
-              answered: selected.keys.where((id) => selected[id] != null).toSet(),
-              flagged: flagged,
-              onSelectIndex: onSelectIndex,
+          if (isDesktopScreen) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: _QuestionNumberStrip(
+                questions: questions,
+                currentIndex: currentIndex,
+                answered: selected.keys
+                    .where((id) => selected[id] != null)
+                    .toSet(),
+                flagged: flagged,
+                onSelectIndex: onSelectIndex,
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           Expanded(
             child: SafeArea(
@@ -412,9 +452,11 @@ class _ExamBody extends ConsumerWidget {
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final isDesktop = constraints.maxWidth >= AppBreakpoints.desktop;
-                    final passage =
-                        question.passageId != null ? _PassageCard(passageId: question.passageId!) : null;
+                    final isDesktop =
+                        constraints.maxWidth >= AppBreakpoints.desktop;
+                    final passage = question.passageId != null
+                        ? _PassageCard(passageId: question.passageId!)
+                        : null;
                     final questionAndOptions = Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -423,7 +465,10 @@ class _ExamBody extends ConsumerWidget {
                         _QuestionCard(text: question.questionText),
                         if (!isDesktop && question.imagePath != null) ...[
                           const SizedBox(height: AppSpacing.md),
-                          _ImagePanel(imagePath: question.imagePath, height: 200),
+                          _ImagePanel(
+                            imagePath: question.imagePath,
+                            height: 200,
+                          ),
                         ],
                         const SizedBox(height: AppSpacing.lg),
                         _OptionsList(
@@ -447,15 +492,26 @@ class _ExamBody extends ConsumerWidget {
                               children: [
                                 Expanded(flex: 6, child: questionAndOptions),
                                 const SizedBox(width: AppSpacing.lg),
-                                Expanded(flex: 4, child: _ImagePanel(imagePath: question.imagePath)),
+                                Expanded(
+                                  flex: 4,
+                                  child: _ImagePanel(
+                                    imagePath: question.imagePath,
+                                  ),
+                                ),
                               ],
                             ),
                           )
                         : questionAndOptions;
 
-                    final prev = OutlinedButton(onPressed: onPrevious, child: const Text('Previous'));
+                    final prev = OutlinedButton(
+                      onPressed: onPrevious,
+                      child: const Text('Previous'),
+                    );
                     final nextOrSubmit = onNext != null
-                        ? FilledButton(onPressed: onNext, child: const Text('Next'))
+                        ? FilledButton(
+                            onPressed: onNext,
+                            child: const Text('Next'),
+                          )
                         : GradientButton(
                             label: 'Submit',
                             dense: true,
@@ -488,6 +544,22 @@ class _ExamBody extends ConsumerWidget {
                         body,
                         const SizedBox(height: AppSpacing.lg),
                         buttons,
+                        // Mobile only: the question-number strip lives here,
+                        // below Previous/Next, instead of up under the
+                        // timer (desktop keeps it up there — see the
+                        // isDesktopScreen block above `_ExamBody.build`).
+                        if (!isDesktop) ...[
+                          const SizedBox(height: AppSpacing.lg),
+                          _QuestionNumberStrip(
+                            questions: questions,
+                            currentIndex: currentIndex,
+                            answered: selected.keys
+                                .where((id) => selected[id] != null)
+                                .toSet(),
+                            flagged: flagged,
+                            onSelectIndex: onSelectIndex,
+                          ),
+                        ],
                       ],
                     );
                   },
@@ -515,7 +587,9 @@ class _QuestionCard extends StatelessWidget {
     final baseStyle = Style(
       margin: Margins.zero,
       color: Colors.white,
-      fontSize: FontSize(Theme.of(context).textTheme.titleMedium?.fontSize ?? 18),
+      fontSize: FontSize(
+        Theme.of(context).textTheme.titleMedium?.fontSize ?? 18,
+      ),
       fontWeight: FontWeight.w600,
       lineHeight: const LineHeight(1.4),
     );
@@ -564,7 +638,11 @@ class _ImagePanel extends StatelessWidget {
         width: double.infinity,
         child: imagePath == null
             ? placeholder
-            : LocalContentImage(relativePath: imagePath, placeholder: placeholder, fit: BoxFit.cover),
+            : LocalContentImage(
+                relativePath: imagePath,
+                placeholder: placeholder,
+                fit: BoxFit.cover,
+              ),
       ),
     );
   }
@@ -660,17 +738,21 @@ class _NumberChip extends StatelessWidget {
             Center(
               child: Text(
                 '${index + 1}',
-                style: Theme.of(context)
-                    .textTheme
-                    .labelMedium
-                    ?.copyWith(color: textColor, fontWeight: isCurrent ? FontWeight.w700 : null),
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: textColor,
+                  fontWeight: isCurrent ? FontWeight.w700 : null,
+                ),
               ),
             ),
             if (isFlagged)
               const Positioned(
                 top: -6,
                 right: -6,
-                child: Icon(Icons.flag_rounded, size: 14, color: AppColors.warning),
+                child: Icon(
+                  Icons.flag_rounded,
+                  size: 14,
+                  color: AppColors.warning,
+                ),
               ),
           ],
         ),
@@ -708,7 +790,10 @@ class _PassageCard extends ConsumerWidget {
                     builder: (context) {
                       final style = Style(
                         margin: Margins.zero,
-                        fontSize: FontSize(Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14),
+                        fontSize: FontSize(
+                          Theme.of(context).textTheme.bodyMedium?.fontSize ??
+                              14,
+                        ),
                         lineHeight: const LineHeight(1.5),
                       );
                       return Html(
@@ -793,7 +878,9 @@ class _OptionRow extends StatelessWidget {
     final optionStyle = Style(
       margin: Margins.zero,
       color: textColor,
-      fontSize: FontSize(Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14),
+      fontSize: FontSize(
+        Theme.of(context).textTheme.bodyMedium?.fontSize ?? 14,
+      ),
       lineHeight: const LineHeight(1.4),
     );
 
@@ -802,11 +889,19 @@ class _OptionRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.signalOrange.withValues(alpha: 0.14) : fill,
+          color: isSelected
+              ? AppColors.signalOrange.withValues(alpha: 0.14)
+              : fill,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: isSelected ? AppColors.signalOrange : outline, width: isSelected ? 1.4 : 1),
+          border: Border.all(
+            color: isSelected ? AppColors.signalOrange : outline,
+            width: isSelected ? 1.4 : 1,
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.05),
@@ -824,21 +919,28 @@ class _OptionRow extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isSelected ? AppColors.signalOrange : Colors.transparent,
-                border: Border.all(color: isSelected ? AppColors.signalOrange : outline, width: 1.6),
+                border: Border.all(
+                  color: isSelected ? AppColors.signalOrange : outline,
+                  width: 1.6,
+                ),
               ),
               child: Text(
                 optionKey,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: isSelected ? Colors.white : textColor,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: isSelected ? Colors.white : textColor,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Html(
                 data: text,
-                style: {'body': optionStyle, 'p': optionStyle, 'span': optionStyle},
+                style: {
+                  'body': optionStyle,
+                  'p': optionStyle,
+                  'span': optionStyle,
+                },
               ),
             ),
           ],

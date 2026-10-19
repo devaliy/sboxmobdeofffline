@@ -54,25 +54,24 @@ class _GradientButtonState extends State<GradientButton> {
             mainAxisSize: widget.expand ? MainAxisSize.max : MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (widget.loading)
+              if (widget.loading) ...[
                 const SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
-                )
-              else if (widget.icon != null) ...[
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ] else if (widget.icon != null) ...[
                 Icon(widget.icon, color: Colors.white, size: 20),
                 const SizedBox(width: AppSpacing.sm),
               ],
-              if (!widget.loading) ...[
-                Flexible(
-                  child: Text(
-                    widget.label,
-                    style: textTheme.labelLarge?.copyWith(color: Colors.white, fontSize: 15),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+              Flexible(
+                child: Text(
+                  widget.label,
+                  style: textTheme.labelLarge?.copyWith(color: Colors.white, fontSize: 15),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
+              ),
             ],
           ),
         ),

@@ -134,10 +134,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ? SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.lg),
-                child: GradientButton(
-                  label: 'Take test',
-                  icon: Icons.quiz_rounded,
-                  onPressed: () => context.push(AppRoutes.studyQuiz(widget.bookId, widget.subjectId)),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GradientButton(
+                        label: 'Take test',
+                        icon: Icons.quiz_rounded,
+                        onPressed: () => context.push(AppRoutes.studyQuiz(widget.bookId, widget.subjectId)),
+                      ),
+                    ),
+                    // Reserves room for the shell's floating AiChatFab, which
+                    // otherwise floats right on top of this bar's end.
+                    const SizedBox(width: 72),
+                  ],
                 ),
               ),
             )

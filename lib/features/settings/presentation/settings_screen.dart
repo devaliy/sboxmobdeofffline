@@ -25,132 +25,163 @@ class SettingsScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final wifiOnly = ref.watch(wifiOnlyDownloadsProvider);
     final studyBytes = ref.watch(studyStorageUsedProvider).valueOrNull ?? 0;
-    final assessmentBytes = ref.watch(assessmentStorageUsedProvider).valueOrNull ?? 0;
+    final assessmentBytes =
+        ref.watch(assessmentStorageUsedProvider).valueOrNull ?? 0;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.xxl, AppSpacing.xxl, AppSpacing.xxl, AppSpacing.huge * 2,
+      // The bottom padding alone doesn't clear the shell's floating
+      // AiChatFab: this list is short enough to rest without scrolling, so
+      // trailing scroll-padding past the last item is never brought into
+      // view. Shrinking the available body height itself, instead, keeps
+      // the last card's bottom edge above the FAB regardless of scroll
+      // state. Desktop has no such FAB collision (see AppShell), so this
+      // reservation only applies below the mobile breakpoint.
+      body: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.sizeOf(context).width >= AppBreakpoints.desktop
+              ? 0
+              : 72,
         ),
-        children: [
-          GlowCard(
-            glow: true,
-            onTap: () => context.push(AppRoutes.profile),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: AppColors.brandBlue,
-                  child: Text(
-                    user == null ? '?' : user.firstName.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xxl,
+            AppSpacing.xxl,
+            AppSpacing.xxl,
+            AppSpacing.huge,
+          ),
+          children: [
+            GlowCard(
+              glow: true,
+              onTap: () => context.push(AppRoutes.profile),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 26,
+                    backgroundColor: AppColors.brandBlue,
+                    child: Text(
+                      user == null
+                          ? '?'
+                          : user.firstName.substring(0, 1).toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user?.fullName ?? 'Loading…',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      Text(
-                        user == null
-                            ? ''
-                            : [
-                                user.email,
-                                if (classOptionByIdOrNull(user.currentClassId) case final c?) c.name,
-                              ].join(' · '),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      if (user?.studentLinkCode != null) ...[
-                        const SizedBox(height: 2),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          'Link code: ${user!.studentLinkCode}',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
+                          user?.fullName ?? 'Loading…',
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
+                        Text(
+                          user == null
+                              ? ''
+                              : [
+                                  user.email,
+                                  if (classOptionByIdOrNull(user.currentClassId)
+                                      case final c?)
+                                    c.name,
+                                ].join(' · '),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        if (user?.studentLinkCode != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Link code: ${user!.studentLinkCode}',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                const Icon(Icons.chevron_right_rounded),
-              ],
+                  const Icon(Icons.chevron_right_rounded),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-          const _SyncSection(),
-          const SizedBox(height: AppSpacing.xxl),
-          GlowCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Dark mode'),
-                  value: isDark,
-                  onChanged: (v) => ref.read(themeModeProvider.notifier).state =
-                      v ? ThemeMode.dark : ThemeMode.light,
-                ),
-                const Divider(),
-                const _FontSizeSetting(),
-                const Divider(),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Wi-Fi-only downloads'),
-                  subtitle: const Text('Applies to new content in Setup'),
-                  value: wifiOnly,
-                  onChanged: (v) {
-                    ref.read(wifiOnlyDownloadsProvider.notifier).state = v;
-                    saveWifiOnlyPreference(v);
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-          GlowCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.download_for_offline_outlined),
-                  title: const Text('Manage downloaded content'),
-                  subtitle: Text(
-                    'Study: ${formatBytes(studyBytes)} · Assessment: ${formatBytes(assessmentBytes)}',
+            const SizedBox(height: AppSpacing.xxl),
+            const _SyncSection(),
+            const SizedBox(height: AppSpacing.xxl),
+            GlowCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Dark mode'),
+                    value: isDark,
+                    onChanged: (v) =>
+                        ref.read(themeModeProvider.notifier).state = v
+                        ? ThemeMode.dark
+                        : ThemeMode.light,
                   ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => context.push(AppRoutes.setup),
-                ),
-                // Dev-only QA aid (spec Section 10) — never a real
-                // destination, so it's unreachable outside debug builds
-                // rather than just unlinked (Phase 8: "remove debug-only
-                // screens").
-                if (kDebugMode) ...[
+                  const Divider(),
+                  const _FontSizeSetting(),
+                  const Divider(),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Wi-Fi-only downloads'),
+                    subtitle: const Text('Applies to new content in Setup'),
+                    value: wifiOnly,
+                    onChanged: (v) {
+                      ref.read(wifiOnlyDownloadsProvider.notifier).state = v;
+                      saveWifiOnlyPreference(v);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            GlowCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.download_for_offline_outlined),
+                    title: const Text('Manage downloaded content'),
+                    subtitle: Text(
+                      'Study: ${formatBytes(studyBytes)} · Assessment: ${formatBytes(assessmentBytes)}',
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => context.push(AppRoutes.setup),
+                  ),
+                  // Dev-only QA aid (spec Section 10) — never a real
+                  // destination, so it's unreachable outside debug builds
+                  // rather than just unlinked (Phase 8: "remove debug-only
+                  // screens").
+                  if (kDebugMode) ...[
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.palette_outlined),
+                      title: const Text('Design system showcase (debug)'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => context.push(AppRoutes.devShowcase),
+                    ),
+                  ],
                   const Divider(),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.palette_outlined),
-                    title: const Text('Design system showcase (debug)'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => context.push(AppRoutes.devShowcase),
+                    leading: const Icon(Icons.logout_rounded),
+                    title: const Text('Log out'),
+                    onTap: () => runLogoutFlow(context, ref),
                   ),
                 ],
-                const Divider(),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.logout_rounded),
-                  title: const Text('Log out'),
-                  onTap: () => runLogoutFlow(context, ref),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -194,13 +225,20 @@ class _FontSizeSettingState extends ConsumerState<_FontSizeSetting> {
           IconButton(
             tooltip: 'Smaller',
             icon: const Icon(Icons.text_decrease_rounded),
-            onPressed: size > kMinReaderFontSize ? () => _setSize(size - 1) : null,
+            onPressed: size > kMinReaderFontSize
+                ? () => _setSize(size - 1)
+                : null,
           ),
-          Text('${size.round()}', style: Theme.of(context).textTheme.labelLarge),
+          Text(
+            '${size.round()}',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
           IconButton(
             tooltip: 'Larger',
             icon: const Icon(Icons.text_increase_rounded),
-            onPressed: size < kMaxReaderFontSize ? () => _setSize(size + 1) : null,
+            onPressed: size < kMaxReaderFontSize
+                ? () => _setSize(size + 1)
+                : null,
           ),
         ],
       ),
@@ -253,7 +291,9 @@ class _SyncSectionState extends ConsumerState<_SyncSection> {
     }
 
     final candidates = <DateTime>[?local, ?server];
-    final resolved = candidates.isEmpty ? null : candidates.reduce((a, b) => a.isAfter(b) ? a : b);
+    final resolved = candidates.isEmpty
+        ? null
+        : candidates.reduce((a, b) => a.isAfter(b) ? a : b);
     if (mounted) setState(() => _lastSynced = resolved);
   }
 
@@ -309,8 +349,11 @@ class _SyncSectionState extends ConsumerState<_SyncSection> {
                 const SizedBox(height: 2),
                 Text(
                   _describeLastSynced(),
-                  style: textTheme.bodySmall
-                      ?.copyWith(color: isDark ? AppColors.textMutedDark : AppColors.textMutedLight),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: isDark
+                        ? AppColors.textMutedDark
+                        : AppColors.textMutedLight,
+                  ),
                 ),
               ],
             ),

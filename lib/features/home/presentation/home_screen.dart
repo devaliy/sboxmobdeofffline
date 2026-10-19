@@ -52,6 +52,9 @@ class _MobileLayout extends StatelessWidget {
         SectionHeader(title: 'Resources'),
         const SizedBox(height: AppSpacing.md),
         const QuickActionsGrid(),
+        // Clears the shell's floating AiChatFab, which otherwise sits on
+        // top of the grid's bottom-right tile when scrolled all the way down.
+        const SizedBox(height: AppSpacing.huge * 2 + AppSpacing.lg),
       ],
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
@@ -6,7 +8,17 @@ import 'core/sync/sync_worker.dart';
 import 'core/theme/theme.dart';
 
 void main() {
-  runApp(const ProviderScope(child: SuccessBoxApp()));
+  // A guard of last resort: an uncaught error anywhere in an unawaited
+  // Future (startup included) would otherwise escape the isolate and take
+  // the whole app down on-device with no on-screen sign of what happened —
+  // as opposed to Flutter's own framework errors (widget build/layout),
+  // which `FlutterError.onError` already reports without crashing.
+  runZonedGuarded(
+    () => runApp(const ProviderScope(child: SuccessBoxApp())),
+    (error, stack) => FlutterError.reportError(
+      FlutterErrorDetails(exception: error, stack: stack),
+    ),
+  );
 }
 
 class SuccessBoxApp extends ConsumerStatefulWidget {
@@ -19,11 +31,15 @@ class SuccessBoxApp extends ConsumerStatefulWidget {
 /// Two of the sync engine's three triggers (spec Section 8) live here at
 /// the app root: app-resume (this observer) and connectivity-regained
 /// (activated below via `syncTriggersProvider`). The third — periodic
-/// background sync via `workmanager` — is deliberately out of scope for
-/// this build: it's Android-only, this environment has no Android
-/// toolchain to compile or run it against, and it couldn't reach the
-/// in-process mock backend from its own isolate regardless.
-class _SuccessBoxAppState extends ConsumerState<SuccessBoxApp> with WidgetsBindingObserver {
+/// background sync via `workmanager` — was never wired up and the
+/// dependency has been removed entirely: on a real Android device its
+/// plugin auto-registers a `WorkManager` startup `ContentProvider` that
+/// runs before `Application.onCreate()`/the Flutter engine, and its
+/// `WorkDatabase` init was crashing the whole process at launch (visible as
+/// the splash flashing and immediately closing) — for a feature that had no
+/// caller anywhere in this codebase.
+class _SuccessBoxAppState extends ConsumerState<SuccessBoxApp>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();

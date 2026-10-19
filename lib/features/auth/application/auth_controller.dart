@@ -41,7 +41,15 @@ class AuthController {
   /// best-effort refreshes the profile in the background — a failure here
   /// (offline, or a genuinely expired token) never forces the student out.
   Future<void> bootstrap() async {
-    final session = await _ref.read(secureSessionStoreProvider).read();
+    StoredSession? session;
+    try {
+      session = await _ref.read(secureSessionStoreProvider).read();
+    } catch (_) {
+      // Secure storage (Android Keystore-backed) can throw on some devices
+      // — treated the same as "no session" rather than left to crash the
+      // app at splash, consistent with every other soft-fail in this file.
+      session = null;
+    }
     if (session == null) {
       _ref.read(authStatusProvider.notifier).state = AuthStatus.loggedOut;
       return;
@@ -60,9 +68,13 @@ class AuthController {
     }
   }
 
-  Future<void> login({required String identifier, required String password}) async {
-    final result =
-        await _ref.read(authEndpointsProvider).login(identifier: identifier, password: password);
+  Future<void> login({
+    required String identifier,
+    required String password,
+  }) async {
+    final result = await _ref
+        .read(authEndpointsProvider)
+        .login(identifier: identifier, password: password);
     await _completeSignIn(result.user, result.token);
   }
 
@@ -74,7 +86,9 @@ class AuthController {
     required String password,
     required int currentClassId,
   }) async {
-    final result = await _ref.read(authEndpointsProvider).register(
+    final result = await _ref
+        .read(authEndpointsProvider)
+        .register(
           firstName: firstName,
           lastName: lastName,
           email: email,
@@ -89,7 +103,9 @@ class AuthController {
   /// only two fields the backend contract allows changing; name/email
   /// aren't editable from the app.
   Future<void> updateProfile({int? currentClassId, String? phoneNumber}) async {
-    final user = await _ref.read(authEndpointsProvider).updateProfile(
+    final user = await _ref
+        .read(authEndpointsProvider)
+        .updateProfile(
           currentClassId: currentClassId,
           phoneNumber: phoneNumber,
         );
@@ -103,10 +119,13 @@ class AuthController {
     required String identifier,
     required String otp,
     required String newPassword,
-  }) =>
-      _ref
-          .read(authEndpointsProvider)
-          .resetPassword(identifier: identifier, otp: otp, newPassword: newPassword);
+  }) => _ref
+      .read(authEndpointsProvider)
+      .resetPassword(
+        identifier: identifier,
+        otp: otp,
+        newPassword: newPassword,
+      );
 
   Future<void> _completeSignIn(AppUser user, String token) async {
     // Per spec Section 3.3: opening `ProgressDb.forUser` transparently
@@ -114,7 +133,9 @@ class AuthController {
     // has used this device before — no branching needed here.
     _ref.read(progressDbProvider(user.id.toString()));
 
-    await _ref.read(secureSessionStoreProvider).save(token: token, userId: user.id);
+    await _ref
+        .read(secureSessionStoreProvider)
+        .save(token: token, userId: user.id);
     _ref.read(currentUserProvider.notifier).state = user;
     _ref.read(needsReauthProvider.notifier).state = false;
     _ref.read(authStatusProvider.notifier).state = AuthStatus.loggedIn;
@@ -127,7 +148,9 @@ class AuthController {
     final session = await _ref.read(secureSessionStoreProvider).read();
     var hadUnsynced = false;
     if (session != null) {
-      final progressDb = _ref.read(progressDbProvider(session.userId.toString()));
+      final progressDb = _ref.read(
+        progressDbProvider(session.userId.toString()),
+      );
       hadUnsynced = (await progressDb.pendingOutbox()).isNotEmpty;
     }
 
@@ -145,4 +168,6 @@ class AuthController {
   }
 }
 
-final authControllerProvider = Provider<AuthController>((ref) => AuthController(ref));
+final authControllerProvider = Provider<AuthController>(
+  (ref) => AuthController(ref),
+);
